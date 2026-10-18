@@ -1,0 +1,19 @@
+html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; user-select: none; -webkit-user-select: none; }
+#app { position: relative; }
+.skin-el { position: absolute; }
+.skin-el canvas { display: block; }
+.skin-text { overflow: hidden; white-space: nowrap; cursor: default; }
+.skin-text.scroll > span { display: inline-block; }
+
+/* plain fallback / test panel */
+.panel { font: 13px/1.4 sans-serif; color: #dfe; background: #14231a; border: 2px solid #3a6; border-radius: 10px; padding: 12px; margin: 8px; }
+.panel h1 { font-size: 14px; margin: 0 0 8px; color: #7f9; }
+.panel button { background: #254; color: #dfe; border: 1px solid #3a6; border-radius: 4px; padding: 3px 8px; margin: 2px; cursor: pointer; }
+.panel button:hover { background: #376; }
+.panel .row { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.panel input[type=range] { flex: 1; }
+.panel .msg { color: #fc8; margin: 4px 0; }
+.panel code { background: #0008; padding: 1px 4px; border-radius: 3px; }
+.panel .bars { display: flex; align-items: flex-end; height: 40px; gap: 1px; }
+.panel .bars i { flex: 1; background: #5f8; min-height: 1px; }
+.panel img.art { width: 56px; height: 56px; object-fit: cover; border-radius: 4px; }

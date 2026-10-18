@@ -1,0 +1,7 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+# skins are copyrighted; never commit them
+skins/*
+!skins/.gitkeep
