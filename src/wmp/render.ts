@@ -2,7 +2,7 @@
 // Supported subset: view/subview, buttonelement/button/buttongroup (mappingImage hit-testing),
 // slider/customslider, text, effects (cava bars), playlist. Everything else is created as
 // an inert placeholder so scripts that reference it by id keep working.
-import { playerCmd } from "../backend";
+import { queueGet, queueSelect, type QueueItem } from "../backend";
 import { ImageStore, parseColor, type RGB } from "./images";
 import type { PlayerShim } from "./player";
 import { fmtTime } from "./player";
@@ -16,6 +16,7 @@ export interface WindowHooks {
   minimize(): void;
   close(): void;
   startDrag(): void;
+  returnHome(): void;
   setShape(rects: number[][]): void;
 }
 
@@ -156,7 +157,7 @@ export class SkinWindow {
       currentViewMode: 0, title: this.skin.theme.attrs.title ?? this.skin.name,
       setTimer: (_id: unknown, ms: number) => self.setViewTimer(ms),
       resizeTo: (nw: number, nh: number) => self.resizeView(nw, nh),
-      returnToMediaCenter: () => void playerCmd("raise"), dispatch: () => {},
+      returnToMediaCenter: () => this.hooks.returnHome(), dispatch: () => {},
     };
     s.theme = {
       get currentViewID() { return self.view.attrs.id ?? ""; },
@@ -618,31 +619,65 @@ export class SkinWindow {
     for (const el of this.all) if (el.tag === "effects" && el.dom.style.display !== "none") el.paint();
   }
 
+  /** The playlist element shows Pear's real queue; double-click a row to play it. */
   private buildPlaylist(el: El) {
     this.layout(el);
     const a = el.attrs, d = el.dom.style;
-    d.overflow = "hidden";
+    d.overflowY = "auto";
+    d.overflowX = "hidden";
     d.fontFamily = a.fontface ? `"${a.fontface}", sans-serif` : "sans-serif";
     d.fontSize = `${num(a.fontsize, 9)}pt`;
     d.color = a.foregroundcolor ?? "#fff";
-    if (a.backgroundcolor) d.background = a.backgroundcolor;
+    if (colorOk(a.backgroundcolor)) d.background = a.backgroundcolor;
+    el.dom.style.pointerEvents = "auto";
+    el.dom.addEventListener("pointerdown", (e) => e.stopPropagation());
+    let rows: QueueItem[] | null = null;
     let last = "";
-    el.paint = () => {
+    let wasVisible = false;
+    const draw = () => {
       const s = this.player.state;
-      const sig = `${s.title}|${s.artist}|${s.length_s}|${s.running}`;
+      const sig = rows ? JSON.stringify(rows.map((r) => [r.video_id, r.selected])) : `${s.title}|${s.artist}|${s.length_s}|${s.running}`;
       if (sig === last) return;
       last = sig;
+      const keep = el.dom.scrollTop;
       el.dom.replaceChildren();
-      const row = document.createElement("div");
-      row.style.cssText = `display:flex;gap:6px;padding:1px 3px;background:${a.selectedcolor ?? a.selectedbackgroundcolor ?? "#ffffff22"}`;
-      row.innerHTML = s.title
-        ? `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span><span></span>`
-        : `<span style="opacity:.6">${s.running ? "Nothing playing" : "YouTube Music is not running"}</span>`;
-      if (s.title) {
-        (row.children[0] as HTMLElement).textContent = `1. ${s.title}${s.artist ? " - " + s.artist : ""}`;
-        (row.children[1] as HTMLElement).textContent = fmtTime(s.length_s);
+      const mk = (text: string, dur: string, selected: boolean, onPlay?: () => void) => {
+        const row = document.createElement("div");
+        row.style.cssText = `display:flex;gap:6px;padding:1px 3px;cursor:${onPlay ? "pointer" : "default"};` + (selected ? `background:${a.selectedcolor ?? "#ffffff30"};font-weight:bold;` : "");
+        const t = document.createElement("span");
+        t.style.cssText = "flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+        t.textContent = text;
+        const u = document.createElement("span");
+        u.textContent = dur;
+        row.append(t, u);
+        if (onPlay) row.addEventListener("dblclick", onPlay);
+        el.dom.appendChild(row);
+        return row;
+      };
+      if (rows && rows.length) {
+        let sel: HTMLElement | null = null;
+        rows.forEach((r, i) => {
+          const row = mk(`${i + 1}. ${r.title}${r.artist ? " - " + r.artist : ""}`, r.duration, r.selected, () => void queueSelect(r.index).then(refresh).catch(() => {}));
+          if (r.selected) sel = row;
+        });
+        if (keep) el.dom.scrollTop = keep; else (sel as HTMLElement | null)?.scrollIntoView({ block: "center" });
+      } else if (s.title) {
+        mk(`1. ${s.title}${s.artist ? " - " + s.artist : ""}`, fmtTime(s.length_s), true);
+      } else {
+        mk(s.running ? "Nothing playing" : "YouTube Music is not running", "", false).style.opacity = ".6";
       }
-      el.dom.appendChild(row);
+    };
+    const refresh = async () => {
+      if (el.dom.style.display === "none") return;
+      try { rows = await queueGet(); } catch { rows = null; }
+      draw();
+    };
+    this.timers.push(window.setInterval(() => void refresh(), 2000));
+    el.paint = () => {
+      const visible = el.dom.style.display !== "none";
+      if (visible && !wasVisible) void refresh();
+      wasVisible = visible;
+      draw();
     };
     el.paint();
   }

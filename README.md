@@ -37,7 +37,7 @@ YouTube Music desktop app  --MPRIS/D-Bus-->  Tauri backend (Rust)  --events-->  
 3. **Add a skin.** Skins are copyrighted and are *not* in this repo (`skins/` is gitignored). Put `.wmz` files in `skins/`, e.g. `skins/Headspace.wmz`. Old WMP skins are collected at the [Internet Archive](https://archive.org/details/windowsmediaplayerskinscollection).
    - Skins are searched for in `$RETRO_SKINS_DIR`, `./skins`, next to the executable, then `~/.local/share/retro-mp3-yt-music/skins`.
    - To try the app without a real skin: `python3 scripts/make_test_skin.py` generates a small original `skins/TestSkin.wmz`.
-4. Start **Pear Desktop / YouTube Music**, log in and play something. It must appear on D-Bus: `playerctl -l` should list it. If it doesn't, enable its MPRIS support (the Shortcuts plugin) in its settings.
+4. Nothing else to do for the player: on first launch this app starts Pear itself and, if needed, edits Pear's config (`~/.config/YouTube Music/config.json`, a backup is saved as `config.json.bak-retro-mp3`) to enable the MPRIS and API-server plugins, hide-to-tray on close, and no auto-resume. Log in to your Google account once in Pear's window.
 5. Run this app:
    ```sh
    npm run tauri dev        # development
@@ -45,11 +45,19 @@ YouTube Music desktop app  --MPRIS/D-Bus-->  Tauri backend (Rust)  --events-->  
    ```
    If YouTube Music isn't running the app tells you so and keeps retrying.
 
+### How it works day to day
+- **Home:** Pear's own YouTube Music window (everything: home, library, playlists, search) plus a small companion panel with the skin chooser, mini controls and an *Open YouTube Music* button.
+- **Start any song in Pear:** the home screen is hidden and the skinned player opens. Resuming the same song or a song auto-advancing doesn't switch.
+- **In the player:** the *playlist* drawer shows Pear's real queue (double-click to play a row). The *return to full mode* button (or right-click > Home) hides the player and brings the home screen back. Only one of the two is ever visible.
+- Hiding Pear's window works on **X11** (we close it politely and Pear hides to its tray). On Wayland the window can't be hidden, so both stay visible.
+- Under i3 add `for_window [class="com.github.th-ch.youtube-music"] floating enable` if you'd rather not have Pear tile.
+- Quitting this app leaves Pear (and your music) running.
+
 ### Using it
 - Drag the skin body to move the window. Buttons, sliders and the visualizer behave as the skin defines.
 - **Right-click** the skin for the menu: choose a skin, toggle always-on-top, open the plain control panel, or quit.
-- With no skins (or a skin that fails to load) a plain control panel is shown with a message explaining where to put skins; with several skins it has a skin chooser (the last choice is remembered).
-- Check that the player is visible to MPRIS: bus names containing `youtube` or `pear` are preferred; if there are none, the app falls back to any other MPRIS player (e.g. YouTube Music open in a browser), preferring one that is playing. Set `RETRO_MPRIS_PLAYER=<substring>` if yours is named differently.
+- The home panel has the skin chooser (the last choice is remembered). With no skins, it explains where to put them.
+- Check that the player is visible to MPRIS: bus names containing `youtube` or `pear` are used. Set `RETRO_MPRIS_ANY=1` to fall back to any other MPRIS player (e.g. YouTube Music in a browser) instead. Set `RETRO_MPRIS_PLAYER=<substring>` if yours is named differently.
 
 ### Tiling window managers (i3, sway)
 The window sets a utility type hint so i3 floats it automatically. If yours still tiles it, add `for_window [class="Retro-mp3-yt-music"] floating enable` to your i3 config. The window has no titlebar; drag the skin body to move it.
@@ -89,7 +97,7 @@ Implemented subset of the WMP skin object model:
 - **Visualizer presets** are our own (bars, mirror, scope, dots), not WMP's effect plugins; **video** isn't supported (YouTube Music plays audio).
 - **"Return to full mode"** (WMP's skin-to-full-player button) raises the YouTube Music app's own window via MPRIS `Raise`; it does nothing if the player doesn't support that.
 - **EQ, balance, playback rate:** rendered and animated but they do nothing, since MPRIS has no equivalent.
-- **Playlist:** YouTube Music's MPRIS doesn't expose the queue, so the playlist element shows only the current track.
+- **Playlist:** the queue comes from Pear's local API server (`127.0.0.1:26538`, no auth, localhost only). If it is unreachable the drawer falls back to the current track.
 - **Skin scripts are untrusted code.** They run in a restricted scope (only a small allow-list of JS globals plus `player`, `view`, `theme` and the skin's elements), but this is best effort, not a security boundary. Only install skins you trust.
 - Skin-script compatibility is validated against a synthetic skin and the WMP documentation; real skins may use attributes or script features not yet implemented. Unsupported elements are logged to the dev console (`[skin] <tag> not supported`).
 - Seeking uses MPRIS `SetPosition`, falling back to relative `Seek`.

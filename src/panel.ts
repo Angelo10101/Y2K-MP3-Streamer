@@ -6,8 +6,11 @@ import { fmtTime } from "./wmp/player";
 export interface PanelInfo {
   skinsDir: string;
   skins: string[];
+  selected?: string;
   message?: string;
   onPick: (name: string) => void;
+  onOpenPlayer: () => void;
+  onOpenYouTube: () => void;
 }
 
 export class Panel {
@@ -19,10 +22,11 @@ export class Panel {
   constructor(private info: PanelInfo) {
     this.el.className = "panel";
     const skins = info.skins.length
-      ? `<div class="row">Skin: <select id="skin">${info.skins.map((s) => `<option>${s}</option>`).join("")}</select><button id="load">Load</button></div>`
+      ? `<div class="row">Skin: <select id="skin">${info.skins.map((s) => `<option${s === info.selected ? " selected" : ""}>${s.replace(/\.wmz$/i, "")}</option>`).join("")}</select><button id="player">Open player</button></div>`
       : `<div class="msg">No skins found. Put a <code>.wmz</code> file (e.g. <code>Headspace.wmz</code>) in <code>${info.skinsDir}</code>.</div>`;
     this.el.innerHTML = `
-      <h1 data-tauri-drag-region>retro-mp3-yt-music</h1>
+      <h1 data-tauri-drag-region>retro-mp3-yt-music: home</h1>
+      <div class="row"><button id="yt">Open YouTube Music</button></div>
       ${info.message ? `<div class="msg">${info.message}</div>` : ""}
       <div id="offline" class="msg"></div>
       <div class="row"><img class="art" id="art" alt=""><div><b id="title">-</b><br><span id="artist"></span> <span id="album"></span></div></div>
@@ -40,7 +44,9 @@ export class Panel {
     on("stop", () => playerCmd("stop"));
     on("shuf", () => playerCmd("shuffle", this.last?.shuffle ? 0 : 1));
     on("rep", () => playerCmd("loop", undefined, this.last?.loop_status === "None" ? "Playlist" : "None"));
-    on("load", () => info.onPick((this.$.skin as HTMLSelectElement).value));
+    on("yt", () => info.onOpenYouTube());
+    on("player", () => info.onOpenPlayer());
+    this.$.skin?.addEventListener("change", () => info.onPick((this.$.skin as HTMLSelectElement).value + ".wmz"));
     const seek = this.$.seek as HTMLInputElement;
     seek.addEventListener("pointerdown", () => (this.seeking = true));
     seek.addEventListener("change", () => { this.seeking = false; void playerCmd("seek_to", Number(seek.value)); });
@@ -51,7 +57,7 @@ export class Panel {
     this.last = s;
     this.$.offline.textContent = s.running
       ? (s.error ?? "")
-      : "YouTube Music isn't running. Start it (youtube-music) and play something.";
+      : "YouTube Music isn't running; starting it...";
     this.$.title.textContent = s.title || "-";
     this.$.artist.textContent = s.artist;
     this.$.album.textContent = s.album ? `· ${s.album}` : "";

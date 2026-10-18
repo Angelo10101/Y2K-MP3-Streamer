@@ -1,5 +1,6 @@
 mod cava;
 mod mpris;
+mod pear;
 mod skins;
 
 use mpris::Mpris;
@@ -19,6 +20,36 @@ async fn player_cmd(
     text: Option<String>,
 ) -> Result<(), String> {
     m.command(&cmd, num, text).await
+}
+
+#[tauri::command]
+async fn pear_start() -> Result<pear::PearStatus, String> {
+    tauri::async_runtime::spawn_blocking(pear::start).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn pear_hide() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(pear::hide_window).await.map_err(|e| e.to_string())?
+}
+
+/// Brings Pear's window back (starting Pear first if it isn't running).
+#[tauri::command]
+async fn pear_show(m: State<'_, Mpris>) -> Result<(), String> {
+    if !pear::is_running() {
+        tauri::async_runtime::spawn_blocking(pear::start).await.map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    m.command("raise", None, None).await
+}
+
+#[tauri::command]
+async fn queue_get() -> Result<Vec<pear::QueueItem>, String> {
+    tauri::async_runtime::spawn_blocking(pear::queue).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn queue_select(index: usize) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || pear::select(index)).await.map_err(|e| e.to_string())?
 }
 
 /// Restricts mouse input to the given `[x, y, w, h]` rectangles (the opaque part
@@ -53,6 +84,11 @@ fn main() {
             player_state,
             player_cmd,
             set_input_shape,
+            pear_start,
+            pear_hide,
+            pear_show,
+            queue_get,
+            queue_select,
             skins::list_skins,
             skins::read_skin
         ])
@@ -77,7 +113,6 @@ fn main() {
                 if let Ok(g) = w.gtk_window() {
                     g.set_type_hint(gtk::gdk::WindowTypeHint::Utility);
                 }
-                let _ = w.show();
             }
             Ok(())
         })

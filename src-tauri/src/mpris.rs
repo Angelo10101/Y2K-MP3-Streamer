@@ -59,7 +59,8 @@ impl Mpris {
             .filter(|n| n.starts_with(PREFIX))
             .collect();
         let preferred = names.iter().find(|n| wanted.iter().any(|w| n.to_lowercase().contains(w.as_str())));
-        if preferred.is_some() || std::env::var("RETRO_MPRIS_PLAYER").is_ok() {
+        // Playing other players (e.g. a browser tab) is opt-in: RETRO_MPRIS_ANY=1
+        if preferred.is_some() || std::env::var("RETRO_MPRIS_PLAYER").is_ok() || std::env::var("RETRO_MPRIS_ANY").is_err() {
             return Ok(preferred.cloned());
         }
         // Fallback: any other player (e.g. YouTube Music open in a browser), preferring one
