@@ -87,6 +87,7 @@ Implemented subset of the WMP skin object model:
 
 ## Known limitations
 - **Visualizer presets** are our own (bars, mirror, scope, dots), not WMP's effect plugins; **video** isn't supported (YouTube Music plays audio).
+- **"Return to full mode"** (WMP's skin-to-full-player button) raises the YouTube Music app's own window via MPRIS `Raise`; it does nothing if the player doesn't support that.
 - **EQ, balance, playback rate:** rendered and animated but they do nothing, since MPRIS has no equivalent.
 - **Playlist:** YouTube Music's MPRIS doesn't expose the queue, so the playlist element shows only the current track.
 - **Skin scripts are untrusted code.** They run in a restricted scope (only a small allow-list of JS globals plus `player`, `view`, `theme` and the skin's elements), but this is best effort, not a security boundary. Only install skins you trust.

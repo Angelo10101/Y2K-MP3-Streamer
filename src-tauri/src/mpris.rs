@@ -138,8 +138,13 @@ impl Mpris {
             .await
             .map_err(|e| e.to_string())?
             .ok_or("YouTube Music is not running")?;
-        let p = self.player_proxy(&name).await.map_err(|e| e.to_string())?;
         let e = |e: zbus::Error| e.to_string();
+        if cmd == "raise" {
+            // org.mpris.MediaPlayer2.Raise brings the player's own window to the front
+            let root = Proxy::new(&self.conn, name.clone(), PATH, "org.mpris.MediaPlayer2").await.map_err(e)?;
+            return root.call_method("Raise", &()).await.map(drop).map_err(e);
+        }
+        let p = self.player_proxy(&name).await.map_err(|e| e.to_string())?;
         match cmd {
             "play" => p.call_method("Play", &()).await.map(drop).map_err(e),
             "pause" => p.call_method("Pause", &()).await.map(drop).map_err(e),

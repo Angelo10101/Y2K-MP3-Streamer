@@ -2,6 +2,7 @@
 // Supported subset: view/subview, buttonelement/button/buttongroup (mappingImage hit-testing),
 // slider/customslider, text, effects (cava bars), playlist. Everything else is created as
 // an inert placeholder so scripts that reference it by id keep working.
+import { playerCmd } from "../backend";
 import { ImageStore, parseColor, type RGB } from "./images";
 import type { PlayerShim } from "./player";
 import { fmtTime } from "./player";
@@ -155,7 +156,7 @@ export class SkinWindow {
       currentViewMode: 0, title: this.skin.theme.attrs.title ?? this.skin.name,
       setTimer: (_id: unknown, ms: number) => self.setViewTimer(ms),
       resizeTo: (nw: number, nh: number) => self.resizeView(nw, nh),
-      returnToMediaCenter: () => {}, dispatch: () => {},
+      returnToMediaCenter: () => void playerCmd("raise"), dispatch: () => {},
     };
     s.theme = {
       get currentViewID() { return self.view.attrs.id ?? ""; },
