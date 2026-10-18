@@ -8,16 +8,38 @@ use std::time::Duration;
 use serde::Serialize;
 use serde_json::{json, Value};
 
+#[cfg(target_os = "linux")]
 const WINDOW_CLASS: &str = "com.github.th-ch.youtube-music";
 
+#[cfg(not(windows))]
 fn command() -> String {
     std::env::var("RETRO_PEAR_CMD").unwrap_or_else(|_| "youtube-music".into())
+}
+
+/// On Windows Pear is installed per user (winget / the installer from its GitHub releases).
+#[cfg(windows)]
+fn command() -> String {
+    if let Ok(c) = std::env::var("RETRO_PEAR_CMD") {
+        return c;
+    }
+    let local = std::env::var("LOCALAPPDATA").unwrap_or_default();
+    let programs = std::env::var("ProgramFiles").unwrap_or_default();
+    [
+        format!(r"{local}\Programs\youtube-music\YouTube Music.exe"),
+        format!(r"{local}\Programs\YouTube Music\YouTube Music.exe"),
+        format!(r"{local}\youtube-music\YouTube Music.exe"),
+        format!(r"{programs}\YouTube Music\YouTube Music.exe"),
+    ]
+    .into_iter()
+    .find(|p| std::path::Path::new(p).is_file())
+    .unwrap_or_else(|| "YouTube Music.exe".into())
 }
 
 fn api() -> String {
     std::env::var("RETRO_PEAR_API").unwrap_or_else(|_| "http://127.0.0.1:26538".into())
 }
 
+#[cfg(not(windows))]
 fn config_path() -> PathBuf {
     let base = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
@@ -26,7 +48,13 @@ fn config_path() -> PathBuf {
     base.join("YouTube Music").join("config.json")
 }
 
+#[cfg(windows)]
+fn config_path() -> PathBuf {
+    PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default()).join("YouTube Music").join("config.json")
+}
+
 /// True if a Pear/YouTube Music process exists.
+#[cfg(target_os = "linux")]
 pub fn is_running() -> bool {
     std::fs::read_dir("/proc")
         .into_iter()
@@ -38,6 +66,31 @@ pub fn is_running() -> bool {
                 .map(|c| c.trim() == "youtube-music")
                 .unwrap_or(false)
         })
+}
+
+#[cfg(windows)]
+const EXE: &str = "YouTube Music.exe";
+
+#[cfg(windows)]
+pub fn is_running() -> bool {
+    use std::os::windows::process::CommandExt;
+    let filter = format!("IMAGENAME eq {EXE}");
+    Command::new("tasklist")
+        .args(["/FI", filter.as_str(), "/NH", "/FO", "CSV"])
+        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains(EXE))
+        .unwrap_or(false)
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+pub fn is_running() -> bool {
+    get_ok(&format!("{}/api/v1/song", api()))
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+fn get_ok(url: &str) -> bool {
+    ureq::get(url).call().is_ok()
 }
 
 /// Settings this app needs: MPRIS (shortcuts plugin), the local API server, hide-to-tray on
@@ -75,14 +128,21 @@ pub struct PearStatus {
 }
 
 fn spawn() -> Result<(), String> {
-    use std::os::unix::process::CommandExt;
-    let mut child = Command::new(command())
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .process_group(0) // survives us quitting
-        .spawn()
-        .map_err(|e| format!("cannot start `{}`: {e} (is pear-desktop-bin installed?)", command()))?;
+    let mut cmd = Command::new(command());
+    cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0); // survives us quitting
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0000_0008 | 0x0000_0200); // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    }
+    let mut child = cmd.spawn().map_err(|e| {
+        format!("cannot start `{}`: {e} (is YouTube Music / Pear Desktop installed? see the README)", command())
+    })?;
     std::thread::spawn(move || {
         let _ = child.wait();
     });
@@ -90,7 +150,13 @@ fn spawn() -> Result<(), String> {
 }
 
 fn stop_pear() {
+    #[cfg(not(windows))]
     let _ = Command::new("pkill").args(["-x", "youtube-music"]).status();
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = Command::new("taskkill").args(["/IM", EXE, "/F"]).creation_flags(0x0800_0000).status();
+    }
     for _ in 0..50 {
         if !is_running() {
             return;
@@ -180,8 +246,22 @@ pub fn hide_window() -> Result<(), String> {
         conn.flush().map_err(|x| e(&x))?;
         return Ok(());
     }
+    #[cfg(windows)]
+    {
+        // WM_CLOSE: with the tray option on, Pear hides to the tray instead of quitting
+        return crate::win::close_pear_windows();
+    }
     #[allow(unreachable_code)]
-    Err("hiding the YouTube Music window is only supported on X11".into())
+    Err("hiding the YouTube Music window is only supported on X11 and Windows".into())
+}
+
+/// Brings Pear's window back (Windows; Linux uses MPRIS `Raise`). Starts Pear if it has no window.
+#[cfg(windows)]
+pub fn show_window() -> Result<(), String> {
+    if crate::win::show_pear_windows()? {
+        return Ok(());
+    }
+    spawn() // a second launch makes Electron's single-instance handler show the window
 }
 
 #[derive(Serialize)]

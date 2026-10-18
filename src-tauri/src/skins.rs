@@ -5,7 +5,8 @@ use std::path::PathBuf;
 use serde::Serialize;
 
 /// Skin search order: `$RETRO_SKINS_DIR`, `./skins`, `../skins` (cargo-run from
-/// `src-tauri`), next to the executable, then `~/.local/share/retro-mp3-yt-music/skins`.
+/// `src-tauri`), next to the executable, then `~/.local/share/retro-mp3-yt-music/skins` (Linux) or
+/// `%APPDATA%\retro-mp3-yt-music\skins` (Windows).
 pub fn skins_dir() -> PathBuf {
     let mut candidates: Vec<PathBuf> = vec![];
     if let Ok(d) = std::env::var("RETRO_SKINS_DIR") {
@@ -20,6 +21,9 @@ pub fn skins_dir() -> PathBuf {
     }
     if let Some(home) = std::env::var_os("HOME") {
         candidates.push(PathBuf::from(home).join(".local/share/retro-mp3-yt-music/skins"));
+    }
+    if let Some(appdata) = std::env::var_os("APPDATA") {
+        candidates.push(PathBuf::from(appdata).join("retro-mp3-yt-music").join("skins"));
     }
     candidates
         .iter()

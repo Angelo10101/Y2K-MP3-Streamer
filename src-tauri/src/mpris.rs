@@ -1,36 +1,14 @@
 //! MPRIS (D-Bus) client for the YouTube Music desktop app.
 
 use std::collections::HashMap;
-use std::time::Duration;
 
-use serde::Serialize;
+use crate::player::PlayerState;
 use zbus::zvariant::{ObjectPath, OwnedValue, Value};
 use zbus::{fdo::DBusProxy, Connection, Proxy};
 
 const PREFIX: &str = "org.mpris.MediaPlayer2.";
 const PATH: &str = "/org/mpris/MediaPlayer2";
 const PLAYER_IFACE: &str = "org.mpris.MediaPlayer2.Player";
-
-#[derive(Serialize, Clone, Default, PartialEq)]
-pub struct PlayerState {
-    pub running: bool,
-    pub bus_name: Option<String>,
-    /// "Playing" | "Paused" | "Stopped"
-    pub status: String,
-    pub title: String,
-    pub artist: String,
-    pub album: String,
-    pub art_url: Option<String>,
-    pub track_id: String,
-    pub length_s: f64,
-    pub position_s: f64,
-    /// 0.0 ..= 1.0
-    pub volume: f64,
-    pub shuffle: bool,
-    /// "None" | "Track" | "Playlist"
-    pub loop_status: String,
-    pub error: Option<String>,
-}
 
 #[derive(Clone)]
 pub struct Mpris {
@@ -211,5 +189,3 @@ fn as_i64(v: &OwnedValue) -> Option<i64> {
         _ => None,
     }
 }
-
-pub const POLL: Duration = Duration::from_millis(250);

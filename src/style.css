@@ -11,6 +11,8 @@ html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; u
 .panel button { background: #254; color: #dfe; border: 1px solid #3a6; border-radius: 4px; padding: 3px 8px; margin: 2px; cursor: pointer; }
 .panel button:hover { background: #376; }
 .panel .row { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.panel select { max-width: 190px; }
+.panel button { white-space: nowrap; }
 .panel input[type=range] { flex: 1; }
 .panel .msg { color: #fc8; margin: 4px 0; }
 .panel code { background: #0008; padding: 1px 4px; border-radius: 3px; }

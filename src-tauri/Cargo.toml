@@ -7,14 +7,18 @@ edition = "2021"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-futures-util = "0.3.34"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 tauri = { version = "2", features = [] }
 tokio = { version = "1.53.3", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time"] }
 ureq = { version = "3", features = ["json"] }
-zbus = "5"
+rustfft = "6"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
 x11rb = "0.13"
+zbus = "5"
+
+[target.'cfg(windows)'.dependencies]
+cpal = "0.15"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }

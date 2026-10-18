@@ -26,5 +26,5 @@
     ],
     "security": { "csp": null }
   },
-  "bundle": { "active": false, "icon": ["icons/icon.png"] }
+  "bundle": { "active": false, "icon": ["icons/icon.png", "icons/icon.ico"] }
 }

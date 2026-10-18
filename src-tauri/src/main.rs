@@ -1,20 +1,28 @@
+mod api_player;
+#[cfg(target_os = "linux")]
 mod cava;
+mod dsp;
+#[cfg(target_os = "linux")]
 mod mpris;
 mod pear;
+mod player;
 mod skins;
+#[cfg(windows)]
+mod viz_win;
+#[cfg(windows)]
+mod win;
 
-use mpris::Mpris;
+use player::Player;
 use tauri::{Emitter, Manager, State};
 
-
 #[tauri::command]
-async fn player_state(m: State<'_, Mpris>) -> Result<mpris::PlayerState, ()> {
+async fn player_state(m: State<'_, Player>) -> Result<player::PlayerState, ()> {
     Ok(m.snapshot().await)
 }
 
 #[tauri::command]
 async fn player_cmd(
-    m: State<'_, Mpris>,
+    m: State<'_, Player>,
     cmd: String,
     num: Option<f64>,
     text: Option<String>,
@@ -34,11 +42,17 @@ async fn pear_hide() -> Result<(), String> {
 
 /// Brings Pear's window back (starting Pear first if it isn't running).
 #[tauri::command]
-async fn pear_show(m: State<'_, Mpris>) -> Result<(), String> {
+async fn pear_show(m: State<'_, Player>) -> Result<(), String> {
     if !pear::is_running() {
         tauri::async_runtime::spawn_blocking(pear::start).await.map_err(|e| e.to_string())?;
         return Ok(());
     }
+    #[cfg(windows)]
+    {
+        let _ = &m;
+        return tauri::async_runtime::spawn_blocking(pear::show_window).await.map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(windows))]
     m.command("raise", None, None).await
 }
 
@@ -73,7 +87,16 @@ fn set_input_shape(window: tauri::WebviewWindow, rects: Vec<[i32; 4]>) -> Result
             })
             .map_err(|e| e.to_string())?;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(windows)]
+    {
+        if rects.is_empty() {
+            return Ok(());
+        }
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as isize;
+        let scale = window.scale_factor().unwrap_or(1.0);
+        window.run_on_main_thread(move || win::set_window_region(hwnd, &rects, scale)).map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(any(target_os = "linux", windows)))]
     let _ = (window, rects);
     Ok(())
 }
@@ -94,18 +117,23 @@ fn main() {
         ])
         .setup(|app| {
             let handle = app.handle().clone();
-            let m = tauri::async_runtime::block_on(Mpris::connect())?;
+            let m = tauri::async_runtime::block_on(Player::connect());
             app.manage(m.clone());
             tauri::async_runtime::spawn({
                 let handle = handle.clone();
                 async move {
                     loop {
                         let _ = handle.emit("player-state", m.snapshot().await);
-                        tokio::time::sleep(mpris::POLL).await;
+                        tokio::time::sleep(player::POLL).await;
                     }
                 }
             });
+            #[cfg(target_os = "linux")]
             tauri::async_runtime::spawn(cava::run(handle));
+            #[cfg(windows)]
+            tauri::async_runtime::spawn(viz_win::run(handle));
+            #[cfg(not(any(target_os = "linux", windows)))]
+            let _ = handle.emit("viz-status", serde_json::json!({ "available": false, "reason": "no audio capture on this platform" }));
             // A utility-type window floats under tiling WMs (i3, sway) instead of being tiled.
             #[cfg(target_os = "linux")]
             if let Some(w) = app.get_webview_window("main") {

@@ -1,0 +1,19 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  # The Windows backend (Pear API player, WASAPI visualizer, window region, hide/show) can only
+  # be compiled on Windows, so this job is what catches Windows-only mistakes.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: cargo test
+        working-directory: src-tauri
