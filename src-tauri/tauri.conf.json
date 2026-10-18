@@ -14,8 +14,8 @@
       {
         "label": "main",
         "title": "retro-mp3-yt-music",
-        "width": 480,
-        "height": 320,
+        "width": 900,
+        "height": 600,
         "decorations": false,
         "transparent": true,
         "resizable": true,

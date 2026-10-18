@@ -30,11 +30,21 @@ function nudgeRepaint() {
 
 const win = async () => (await import("@tauri-apps/api/window")).getCurrentWindow();
 
+/**
+ * The window is created large (see tauri.conf.json) and only ever grows. Compositors such as
+ * picom animate every geometry change, and overlapping animations can leave the window showing
+ * stale content until the next focus change. The unused area is transparent and click-through
+ * (input shape), so a big window costs nothing.
+ */
+let winW = 900;
+let winH = 600;
 const hooks: WindowHooks = {
   resize: async (w, h) => {
-    if (!inTauri) return;
+    if (!inTauri || (w <= winW && h <= winH)) return;
+    winW = Math.max(winW, w);
+    winH = Math.max(winH, h);
     const { LogicalSize } = await import("@tauri-apps/api/window");
-    await (await win()).setSize(new LogicalSize(w, h));
+    await (await win()).setSize(new LogicalSize(winW, winH));
   },
   setAlwaysOnTop: async (on) => inTauri && (await win()).setAlwaysOnTop(on),
   minimize: async () => inTauri && (await win()).minimize(),
@@ -110,10 +120,8 @@ async function showHome(message?: string) {
   app.replaceChildren(panel.el);
   panel.update(player.state);
   if (inTauri) {
-    const { LogicalSize } = await import("@tauri-apps/api/window");
     const w = await win();
-    await w.setSize(new LogicalSize(420, 430));
-    void setInputShape([[0, 0, 420, 430]]);
+    void setInputShape([[0, 0, 420, 430]]); // only the panel takes clicks, the rest of the window is click-through
     await w.show();
   }
   nudgeRepaint();
