@@ -16,12 +16,17 @@ export function parseColor(s: string | undefined): RGB | null {
 
 const MIME: Record<string, string> = { bmp: "image/bmp", png: "image/png", gif: "image/gif", jpg: "image/jpeg", jpeg: "image/jpeg" };
 
+/** Decoded images kept around, in pixels (about 120 MB of RGBA). */
+const CACHE_PIXELS = 30_000_000;
+
 /** A GIF being played: frames are drawn onto `canvas` on a timer (see `ImageStore.tick`). */
 interface Animated { gif: Gif; canvas: HTMLCanvasElement; keys: RGB[]; index: number; nextAt: number; loopsLeft: number; done: boolean }
 
 export class ImageStore {
   private cache = new Map<string, Promise<HTMLCanvasElement | null>>();
   private animated: Animated[] = [];
+  private sizes = new Map<string, number>();
+  private pixels = 0;
   private lastTick = 0;
   /** Canvases that are redrawn by `tick()` and so must not be copied. */
   isAnimated(c: HTMLCanvasElement) { return this.animated.some((a) => a.canvas === c); }
@@ -57,6 +62,17 @@ export class ImageStore {
     if (!p) {
       p = this.decode(path, key);
       this.cache.set(id, p);
+      // frame-by-frame animations load hundreds of images: keep the cache bounded (oldest first)
+      void p.then((c) => {
+        if (!c || !this.cache.has(id)) return;
+        this.sizes.set(id, c.width * c.height);
+        this.pixels += c.width * c.height;
+        for (const k of this.cache.keys()) {
+          if (this.pixels <= CACHE_PIXELS) break;
+          if (k === id || !this.sizes.has(k)) continue;
+          this.pixels -= this.sizes.get(k)!; this.sizes.delete(k); this.cache.delete(k);
+        }
+      });
     }
     return p;
   }

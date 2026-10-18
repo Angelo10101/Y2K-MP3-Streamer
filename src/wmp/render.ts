@@ -6,6 +6,7 @@ import { queueGet, queueSelect, type QueueItem } from "../backend";
 import { ImageStore, parseColor, type RGB } from "./images";
 import type { PlayerShim } from "./player";
 import { ci, fmtTime } from "./player";
+import { overrideFor, type SkinOverride } from "./overrides";
 import { Scope } from "./scope";
 import type { Skin } from "./skin";
 import type { WmsNode } from "./xml";
@@ -86,13 +87,16 @@ export class SkinWindow {
   private viewEl!: El;
   private timers: number[] = [];
   private shapeTimer = 0;
+  private shapeWant = 0;
   private raf = 0;
   private unsupported = new Set<string>();
   private disposed = false;
   private viewTimer = 0;
+  private override: SkinOverride;
 
   constructor(private skin: Skin, private view: WmsNode, private player: PlayerShim, private host: HTMLElement, private hooks: WindowHooks) {
     this.images = new ImageStore(skin);
+    this.override = overrideFor(skin.name);
   }
 
   // ---------- lifecycle ----------
@@ -118,9 +122,12 @@ export class SkinWindow {
     // resources of Windows DLLs, which we replace with built-in constants.
     for (const sf of (v.scriptfile ?? this.skin.theme.attrs.scriptfile ?? "").split(";").map((x) => x.trim()).filter(Boolean)) {
       if (/^res:/i.test(sf)) continue;
-      const src = this.skin.text(sf);
-      if (src === undefined) console.warn(`[skin] script ${sf} not found`);
-      else this.scope.run(src, sf);
+      let src = this.skin.text(sf);
+      if (src === undefined) { console.warn(`[skin] script ${sf} not found`); continue; }
+      for (const [from, to] of this.override.scriptPatches ?? []) {
+        if (src.includes(from)) src = src.split(from).join(to);
+      }
+      this.scope.run(src, sf);
     }
     for (const key of ["onload"]) {
       if (v[key]) this.scope.run(v[key], "view.onload");
@@ -137,6 +144,8 @@ export class SkinWindow {
       if (press && (e.buttons & 1) && Math.hypot(e.screenX - press.x, e.screenY - press.y) > 4) { press = null; this.hooks.startDrag(); }
     });
     this.root.addEventListener("pointerup", () => { press = null; });
+    const dbl = this.override.doubleClick;
+    if (dbl) this.root.addEventListener("dblclick", () => { if (this.scope.eval(dbl.when)) this.scope.run(dbl.run, "doubleClick"); });
     this.timers.push(window.setInterval(() => this.sync(false), 100));
     const loop = (t: number) => { this.images.tick(t); this.drawEffects(); this.raf = requestAnimationFrame(loop); };
     this.raf = requestAnimationFrame(loop);
@@ -195,6 +204,7 @@ export class SkinWindow {
     this.viewTimerMs = ms;
     clearInterval(this.viewTimer);
     if (ms > 0) {
+      ms = Math.max(5, ms / (this.override.timerSpeed ?? 1));
       this.viewTimer = window.setInterval(() => {
         if (this.view.attrs.ontimer) this.scope.run(this.view.attrs.ontimer, "ontimer");
         this.scope.call("view_onTimer");
@@ -956,9 +966,24 @@ export class SkinWindow {
   }
 
   // ---------- window shape ----------
+  /**
+   * Recomputes the click-through shape `ms` from now. Requests arriving while one is pending do not
+   * push it back (a frame animation asks every few ms and would starve a plain debounce); a later
+   * request than the pending one is remembered and honoured afterwards.
+   */
   scheduleShape(ms = 150) {
-    clearTimeout(this.shapeTimer);
-    this.shapeTimer = window.setTimeout(() => !this.disposed && this.hooks.setShape(this.computeShape()), ms);
+    const now = performance.now();
+    this.shapeWant = Math.max(this.shapeWant, now + ms);
+    if (this.shapeTimer) return;
+    const fire = () => {
+      this.shapeTimer = 0;
+      if (this.disposed) return;
+      this.hooks.setShape(this.computeShape());
+      const left = this.shapeWant - performance.now();
+      if (left > 10) this.shapeTimer = window.setTimeout(fire, Math.min(left, 150));
+      else this.shapeWant = 0;
+    };
+    this.shapeTimer = window.setTimeout(fire, Math.min(ms, 150));
   }
 
   /** Union of everything painted, as `[x, y, w, h]` rectangles (input region). */
