@@ -58,3 +58,5 @@ export interface PearStatus { running: boolean; message: string | null }
 export const pearStart = () => invoke<PearStatus>("pear_start");
 export const pearHide = () => invoke<void>("pear_hide");
 export const pearShow = () => invoke<void>("pear_show");
+
+export const startupOptions = () => invoke<{ skin: string | null; debug: boolean }>("startup_options");

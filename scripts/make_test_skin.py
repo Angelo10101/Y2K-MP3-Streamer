@@ -73,6 +73,7 @@ wms = f'''<?xml version="1.0"?>
           transparencyColor="#FF00FF" min="0" max="100" value="wmpprop:player.settings.volume"/>
   <EFFECTS id="viz" left="20" top="110" width="200" height="22" type="bars" foregroundColor="#5dff8a"/>
   <BUTTONELEMENT id="more" left="270" top="112" image="thumb.bmp" hoverImage="thumb.bmp" downImage="thumb.bmp" transparencyColor="#FF00FF" upToolTip="Toggle panel" onclick="jscript:togglePanel();"/>
+  <BUTTONELEMENT id="homeBtn" left="245" top="112" image="thumb.bmp" hoverImage="thumb.bmp" downImage="thumb.bmp" transparencyColor="#FF00FF" upToolTip="Home" onclick="jscript:view.returnToMediaCenter();"/>
   <SUBVIEW id="side" left="{W-90}" top="20" width="90" height="100" backgroundImage="panel.bmp" transparencyColor="#FF00FF" visible="false" zIndex="5">
    <TEXT id="sideText" left="6" top="6" width="78" height="60" fontSize="8" foregroundColor="#c8ffd2" wordWrap="true" value="wmpprop:player.currentMedia.getItemInfo('Author')"/>
   </SUBVIEW>

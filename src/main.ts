@@ -1,11 +1,11 @@
 // App flow: "home" = Pear's own YouTube Music window plus a small companion panel (skin
 // chooser, mini controls); "player" = the skinned player with Pear's window hidden.
 // Only one of the two is ever visible.
-import { emptyState, inTauri, listSkins, onPlayerState, onViz, pearHide, pearShow, pearStart, readSkin, setInputShape, type PlayerState } from "./backend";
+import { emptyState, inTauri, listSkins, onPlayerState, onViz, pearHide, pearShow, pearStart, readSkin, setInputShape, startupOptions, type PlayerState } from "./backend";
 import { Panel } from "./panel";
 import { PlayerShim } from "./wmp/player";
 import { SkinWindow, type WindowHooks } from "./wmp/render";
-import { loadSkin } from "./wmp/skin";
+import { loadSkin, pickMainView } from "./wmp/skin";
 
 type Mode = "home" | "player";
 const app = document.getElementById("app")!;
@@ -134,7 +134,7 @@ async function openSkin(name: string): Promise<boolean> {
     closeMenu();
     current?.dispose();
     panel = undefined;
-    current = new SkinWindow(skin, skin.views[0], player, app, hooks);
+    current = new SkinWindow(skin, pickMainView(skin.views), player, app, hooks);
     await current.mount();
     localStorage.setItem("skin", name);
     (window as unknown as { __skins: unknown }).__skins = { skin, current };
@@ -183,6 +183,8 @@ async function openMenu(x: number, y: number) {
   };
   document.addEventListener("pointerdown", off, true);
 }
+// Escape always goes Home from the player, for skins without a "return to full mode" button
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && mode === "player") void enterHome(); });
 document.addEventListener("contextmenu", (e) => {
   e.preventDefault();
   if (mode === "player") void openMenu(e.clientX, e.clientY);
@@ -196,6 +198,34 @@ document.addEventListener("contextmenu", (e) => {
     pearMessage = status.message ?? undefined;
   }
   await showHome();
+  // development aid: RETRO_SKIN=<name> opens that skin's player immediately
+  if (inTauri) {
+    const opts = await startupOptions();
+    if (opts.debug) {
+      document.addEventListener("pointerdown", (e) => {
+        const stack = document.elementsFromPoint(e.clientX, e.clientY).slice(0, 8).map((n) => {
+          const el = n as HTMLElement;
+          return `${el.tagName.toLowerCase()}${el.id ? "#" + el.id : ""}.${[...el.classList].join(".")}${el.title ? `[${el.title}]` : ""}`;
+        });
+        const covering = [...document.querySelectorAll<HTMLElement>(".skin-el, .skin-el canvas")]
+          .filter((n) => { const r = n.getBoundingClientRect(); return n.offsetParent && e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom; })
+          .map((n) => { const r = n.getBoundingClientRect(); return `${n.tagName.toLowerCase()}${n.id ? "#" + n.id : ""}:${getComputedStyle(n).pointerEvents}${n.classList.contains("pass") ? ":pass" : ""}[${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)} ov=${getComputedStyle(n).overflow}]`; });
+        console.warn(`[click] (${Math.round(e.clientX)},${Math.round(e.clientY)}) top: ${stack.join(" > ")} | covering: ${covering.join(" ")}`);
+        // is an auto element really unreachable? probe its own centre
+        for (const n of document.querySelectorAll<HTMLElement>(".skin-el canvas")) {
+          const r = n.getBoundingClientRect();
+          if (r.width && r.width < 120 && getComputedStyle(n).pointerEvents === "auto" && e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom) {
+            const top = document.elementsFromPoint(r.left + r.width / 2, r.top + r.height / 2).slice(0, 4).map((x) => (x as HTMLElement).tagName.toLowerCase() + ((x as HTMLElement).id ? "#" + (x as HTMLElement).id : ""));
+            let chain = ""; for (let a: HTMLElement | null = n; a && a.id !== "skin-root"; a = a.parentElement) chain += `${a.tagName.toLowerCase()}(${getComputedStyle(a).pointerEvents},${getComputedStyle(a).display},${getComputedStyle(a).visibility}) < `;
+            console.warn(`[probe] canvas ${Math.round(r.width)}x${Math.round(r.height)} at centre: ${top.join(">")} chain ${chain}`);
+          }
+        }
+      }, true);
+    }
+    const want = opts.skin?.toLowerCase().replace(/\.wmz$/, "");
+    const found = want && (await listSkins()).skins.find((n) => n.toLowerCase().replace(/\.wmz$/, "") === want);
+    if (found) { localStorage.setItem("skin", found); await enterPlayer(); return; }
+  }
   // Pear may have been left hidden by a previous run (player mode); bring it back. Right
   // after a fresh launch it isn't on D-Bus yet, so retry for a while.
   if (inTauri) {

@@ -5,7 +5,7 @@
 import { queueGet, queueSelect, type QueueItem } from "../backend";
 import { ImageStore, parseColor, type RGB } from "./images";
 import type { PlayerShim } from "./player";
-import { fmtTime } from "./player";
+import { ci, fmtTime } from "./player";
 import { Scope } from "./scope";
 import type { Skin } from "./skin";
 import type { WmsNode } from "./xml";
@@ -23,6 +23,11 @@ export interface WindowHooks {
 const num = (v: unknown, d = 0) => { const n = parseFloat(String(v)); return Number.isFinite(n) ? n : d; };
 const truthy = (v: unknown, d = true) => (v === undefined || v === "" ? d : !/^(false|0|no)$/i.test(String(v)));
 const colorOk = (c: string | undefined) => !!c && !/^\s*(none|transparent)\s*$/i.test(c);
+/** WMP's own "return to full mode" button doubles as our Home button. */
+const isHomeButton = (el: { attrs: Record<string, string> }) => /returnToMediaCenter/i.test(el.attrs.onclick ?? "");
+const HOME_TIP = "Home (YouTube Music)";
+const tipOf = (el: { attrs: Record<string, string> }) => (isHomeButton(el) ? HOME_TIP : el.attrs.uptooltip ?? "");
+
 /** Default behaviour of WMP's special button elements (they have no onclick). */
 const BUILTIN: Record<string, string> = {
   prevelement: "previous", prevbutton: "previous", nextelement: "next", nextbutton: "next",
@@ -36,10 +41,13 @@ const WMP_CONSTANTS: Record<string, number> = {
   osUndefined: 0, osPlaylistChanging: 1, osPlaylistLocating: 2, osPlaylistConnecting: 3, osPlaylistLoading: 4,
   osPlaylistOpening: 5, osPlaylistOpenNoMedia: 6, osPlaylistChanged: 7, osMediaChanging: 8, osMediaLocating: 9,
   osMediaConnecting: 10, osMediaLoading: 11, osMediaOpening: 12, osMediaOpen: 13,
+  psUndefined: 0, psStopped: 1, psPaused: 2, psPlaying: 3, psScanForward: 4, psScanReverse: 5,
+  psBuffering: 6, psWaiting: 7, psMediaEnded: 8, psTransitioning: 9, psReady: 10, psReconnecting: 11,
   wmppsUndefined: 0, wmppsStopped: 1, wmppsPaused: 2, wmppsPlaying: 3, wmppsScanForward: 4, wmppsScanReverse: 5,
   wmppsBuffering: 6, wmppsWaiting: 7, wmppsMediaEnded: 8, wmppsTransitioning: 9, wmppsReady: 10, wmppsReconnecting: 11,
 };
 const BINDING = /^\s*(wmpprop|wmpenabled|wmpdisabled)\s*:(.*)$/i;
+const IMAGE_KEYS = new Set(["image", "hoverimage", "downimage", "disabledimage", "backgroundimage"]);
 const BOOL_KEYS = new Set(["visible", "enabled", "tiled", "scrolling", "wordwrap", "allowall", "toggle"]);
 const NUM_KEYS = new Set(["left", "top", "width", "height", "zindex", "alphablend", "min", "max", "value", "bordersize", "fontsize"]);
 
@@ -53,9 +61,15 @@ class El {
   dragging = false;
   lastSig = "";
   preset = 0;
+  /** an empty container laid out as a zero-size box, so it can never hide the elements beneath it */
+  collapsed = false;
   api!: Record<string, unknown>;
   /** per-type hooks */
   paint: () => void = () => {};
+  /** re-reads the element's image attributes (after a script changed `image` / `backgroundImage`) */
+  reloadImages?: () => Promise<void>;
+  /** buttongroup: opaque where a button can be hit, so hover-only buttons stay clickable */
+  hitMask?: HTMLCanvasElement;
   constructor(public node: WmsNode, public parent: El | null) {
     this.attrs = { ...node.attrs };
     this.dom.className = "skin-el";
@@ -112,6 +126,7 @@ export class SkinWindow {
       if (v[key]) this.scope.run(v[key], "view.onload");
     }
     this.scope.call("view_onload");
+    if (v.timerinterval) this.setViewTimer(num(v.timerinterval)); // e.g. timerInterval="3000" onTimer="..."
     this.sync(true);
 
     // Drag the window by the skin body, but only once the pointer really moves, so plain
@@ -123,8 +138,8 @@ export class SkinWindow {
     });
     this.root.addEventListener("pointerup", () => { press = null; });
     this.timers.push(window.setInterval(() => this.sync(false), 100));
-    const loop = () => { this.drawEffects(); this.raf = requestAnimationFrame(loop); };
-    loop();
+    const loop = (t: number) => { this.images.tick(t); this.drawEffects(); this.raf = requestAnimationFrame(loop); };
+    this.raf = requestAnimationFrame(loop);
     this.scheduleShape(50);
   }
 
@@ -135,6 +150,7 @@ export class SkinWindow {
     cancelAnimationFrame(this.raf);
     clearTimeout(this.shapeTimer);
     this.scope.dispose();
+    this.images.dispose();
     this.root?.remove();
   }
 
@@ -144,7 +160,7 @@ export class SkinWindow {
     s.player = this.player.api;
     Object.assign(s, WMP_CONSTANTS);
     s.mediacenter = { effectType: "", effectPreset: 0 };
-    s.view = {
+    s.view = ci({
       get width() { return w; }, get height() { return h; },
       set width(v: number) { w = num(v); self.resizeView(w, h); },
       set height(v: number) { h = num(v); self.resizeView(w, h); },
@@ -159,11 +175,18 @@ export class SkinWindow {
       setTimer: (_id: unknown, ms: number) => self.setViewTimer(ms),
       resizeTo: (nw: number, nh: number) => self.resizeView(nw, nh),
       returnToMediaCenter: () => this.hooks.returnHome(), dispatch: () => {},
-    };
-    s.theme = {
+    });
+    // scripts may address the view by its id (`<view id="noodle">` ... `noodle.timerInterval = 250`)
+    if (this.view.attrs.id) s[this.view.attrs.id] = s.view;
+    s.theme = ci({
       get currentViewID() { return self.view.attrs.id ?? ""; },
       openView: () => {}, loadPreset: () => {}, savePreset: () => {}, close: () => this.hooks.close(),
-    };
+      // skins remember their own settings (EQ presets, repeat, ...) between runs
+      loadPreference: (k: string) => { try { return localStorage.getItem(`pref:${this.skin.name}:${k}`) ?? ""; } catch { return ""; } },
+      savePreference: (k: string, v: unknown) => { try { localStorage.setItem(`pref:${this.skin.name}:${k}`, String(v)); } catch { /* ignore */ } },
+      // file dialogs are not supported: we never open media ourselves
+      openDialog: () => "",
+    });
     s.alert = (m: unknown) => console.info("[skin alert]", m);
   }
   private alwaysOnTop = false;
@@ -198,7 +221,12 @@ export class SkinWindow {
   private installPlayerEvents() {
     this.player.onEvent((ev, arg) => {
       const attr = `on${ev}`;
-      for (const el of [this.viewEl, ...this.all]) if (el.attrs[attr]) this.scope.run(el.attrs[attr], attr);
+      // `<player PlayState_onchange="...">` is the older spelling of these events
+      const alias = ev === "playstatechange" ? "playstate_onchange" : ev === "openstatechange" ? "openstate_onchange" : "";
+      for (const el of [this.viewEl, ...this.all]) {
+        if (el.attrs[attr]) this.scope.run(el.attrs[attr], attr);
+        if (alias && el.attrs[alias]) this.scope.run(el.attrs[alias], alias);
+      }
       this.scope.call(attr, arg);
       this.scope.call(`player_${attr}`, arg);
       this.sync(true);
@@ -262,6 +290,8 @@ export class SkinWindow {
     parent.dom.appendChild(el.dom);
     this.makeApi(el);
     if (el.id) this.scope.store[el.id] = el.api;
+    // passThrough: mouse events go to whatever is underneath (an intro animation layer, say)
+    if (/^true$/i.test(node.attrs.passthrough ?? "")) el.dom.classList.add("pass");
 
     switch (node.tag) {
       case "subview": await this.buildSubview(el); break;
@@ -288,8 +318,11 @@ export class SkinWindow {
     d.left = `${this.n(el, "left")}px`;
     d.top = `${this.n(el, "top")}px`;
     const w = this.n(el, "width", NaN), h = this.n(el, "height", NaN);
-    if (!isNaN(w)) d.width = `${w}px`;
-    if (!isNaN(h)) d.height = `${h}px`;
+    if (el.collapsed) { d.width = "0px"; d.height = "0px"; d.overflow = "visible"; }
+    else {
+      if (!isNaN(w)) d.width = `${w}px`;
+      if (!isNaN(h)) d.height = `${h}px`;
+    }
     d.display = vis ? "" : "none";
     const z = el.attrs.zindex; if (z !== undefined) d.zIndex = String(num(z));
     const a = el.attrs.alphablend; if (a !== undefined) d.opacity = String(Math.max(0, Math.min(1, num(a, 255) / 255)));
@@ -301,14 +334,35 @@ export class SkinWindow {
     if (colorOk(a.backgroundcolor)) el.dom.style.background = a.backgroundcolor;
     // negative zIndex children sit under the subview's own background; keep them inside it
     el.dom.style.isolation = "isolate";
+    // a subview with an explicit size clips its contents (e.g. a digit strip slid past a small window)
+    if (a.width && a.height) el.dom.style.overflow = "hidden";
+    // A big empty container (no image/colour/handlers) must not catch the mouse. WebKit hides the
+    // children of a pointer-events:none positioned element too, so collapse it to zero size instead.
+    const emptyBox = !a.backgroundimage && !colorOk(a.backgroundcolor) && !a.onclick && !a.onmousedown && !a.onmouseover;
+    if (emptyBox && !(this.n(el, "width", 0) * this.n(el, "height", 0) < 4000 && a.width && a.height)) {
+      el.collapsed = true;
+      this.layout(el);
+    }
     const bg = await this.images.load(a.backgroundimage, [parseColor(a.transparencycolor), parseColor(a.clippingcolor)]);
     if (bg) {
-      el.canvas = this.cloneCanvas(bg);
+      el.canvas = this.images.isAnimated(bg) ? bg : this.cloneCanvas(bg);
       el.canvas.style.cssText = "position:absolute;left:0;top:0;pointer-events:none";
       el.dom.prepend(el.canvas);
       if (!a.width) el.dom.style.width = `${bg.width}px`;
       if (!a.height) el.dom.style.height = `${bg.height}px`;
     }
+    el.reloadImages = async () => {
+      const nb = await this.images.load(el.attrs.backgroundimage, [parseColor(el.attrs.transparencycolor), parseColor(el.attrs.clippingcolor)]);
+      const old = el.canvas;
+      if (!nb) { old?.remove(); el.canvas = undefined; this.scheduleShape(); return; }
+      const nc = this.images.isAnimated(nb) ? nb : this.cloneCanvas(nb);
+      nc.style.cssText = "position:absolute;left:0;top:0;pointer-events:none";
+      if (old && old.parentElement === el.dom) el.dom.replaceChild(nc, old); else el.dom.prepend(nc);
+      el.canvas = nc;
+      if (!el.attrs.width) el.dom.style.width = `${nb.width}px`;
+      if (!el.attrs.height) el.dom.style.height = `${nb.height}px`;
+      this.scheduleShape();
+    };
     this.wireMouse(el, el.dom);
     for (const c of el.node.children) await this.build(c, el);
   }
@@ -320,8 +374,23 @@ export class SkinWindow {
     return c;
   }
 
+  /**
+   * Colours treated as transparent in an element's images: its own `transparencyColor`, plus the
+   * `clippingColor` and `transparencyColor` of every ancestor (a subview's keyed colours also apply to
+   * the images of its children).
+   */
+  private keysFor(el: El): RGB[] {
+    const keys: RGB[] = [];
+    const own = parseColor(el.attrs.transparencycolor);
+    if (own) keys.push(own);
+    for (let p = el.parent; p; p = p.parent) {
+      for (const c of [parseColor(p.attrs.clippingcolor), parseColor(p.attrs.transparencycolor)]) if (c) keys.push(c);
+    }
+    return keys;
+  }
+
   private stateImages(el: El, over: Record<string, string> = el.attrs) {
-    const key = parseColor(el.attrs.transparencycolor);
+    const key = this.keysFor(el);
     return Promise.all(["image", "hoverimage", "downimage", "disabledimage"].map((k) => this.images.load(over[k], key)));
   }
 
@@ -331,18 +400,26 @@ export class SkinWindow {
   }
 
   private async buildButton(el: El) {
-    const [img, hov, down, dis] = await this.stateImages(el);
-    const w = img?.width ?? this.n(el, "width"), h = img?.height ?? this.n(el, "height");
+    let [img, hov, down, dis] = await this.stateImages(el);
+    let w = img?.width ?? this.n(el, "width"), h = img?.height ?? this.n(el, "height");
     el.dom.style.width = `${w}px`; el.dom.style.height = `${h}px`;
     this.layout(el);
     const c = document.createElement("canvas");
     c.width = w; c.height = h;
     el.canvas = c;
     el.dom.appendChild(c);
+    el.reloadImages = async () => {
+      [img, hov, down, dis] = await this.stateImages(el);
+      w = img?.width ?? w; h = img?.height ?? h;
+      c.width = w; c.height = h;
+      el.dom.style.width = `${w}px`; el.dom.style.height = `${h}px`;
+      el.paint();
+      this.scheduleShape();
+    };
     el.paint = () => {
       const enabled = this.isEnabled(el);
       const pick = !enabled ? dis ?? img : el.down ? down ?? hov ?? img : el.hover ? hov ?? img : img;
-      c.title = el.attrs.uptooltip ?? "";
+      c.title = tipOf(el);
       const ctx = c.getContext("2d")!;
       ctx.clearRect(0, 0, w, h);
       if (pick) ctx.drawImage(pick, 0, 0);
@@ -407,6 +484,16 @@ export class SkinWindow {
       const rgb = parseColor(n.attrs.mappingcolor);
       kids.push({ el: k, rgb: rgb ?? [-1, -1, -1], mask: null });
     }
+    if (mapData && mapImg && kids.some((k) => k.rgb[0] >= 0)) {
+      const hm = document.createElement("canvas"); hm.width = mapImg.width; hm.height = mapImg.height;
+      const hc = hm.getContext("2d")!; const out = hc.createImageData(hm.width, hm.height);
+      const want = new Set(kids.filter((k) => k.rgb[0] >= 0).map((k) => (k.rgb[0] << 16) | (k.rgb[1] << 8) | k.rgb[2]));
+      for (let i = 0; i < mapData.data.length; i += 4) {
+        if (want.has((mapData.data[i] << 16) | (mapData.data[i + 1] << 8) | mapData.data[i + 2])) out.data.set([255, 255, 255, 255], i);
+      }
+      hc.putImageData(out, 0, 0);
+      el.hitMask = hm;
+    }
     const maskFor = (k: (typeof kids)[number]) => {
       if (k.mask || !mapData || !mapImg) return k.mask;
       const m = document.createElement("canvas"); m.width = mapImg.width; m.height = mapImg.height;
@@ -447,7 +534,7 @@ export class SkinWindow {
       cur = k;
       if (cur) { cur.el.hover = true; this.fire(cur.el, "onmouseover"); }
       c.style.cursor = cur ? "pointer" : "";
-      c.title = cur?.el.attrs.uptooltip ?? "";
+      c.title = cur ? tipOf(cur.el) : "";
       el.paint();
     };
     c.addEventListener("pointermove", (e) => setHover(at(...pos(e))));
@@ -469,9 +556,78 @@ export class SkinWindow {
     });
   }
 
-  private async buildSlider(el: El) {
+  /**
+   * `<customslider image=filmstrip positionImage=map>`: the map image gives the size and the hit
+   * area (grey level = value, from min at black to max at white; the transparency colour is
+   * outside), and the filmstrip holds one frame per step, picked by the current value.
+   */
+  private async buildFilmstripSlider(el: El) {
     const a = el.attrs;
-    const key = parseColor(a.transparencycolor);
+    const key = parseColor(a.transparencycolor) ?? [255, 0, 255];
+    const [film, map] = await Promise.all([this.images.load(a.image, this.keysFor(el).concat(parseColor(a.transparencycolor) ? [] : [key])), this.images.load(a.positionimage, null)]);
+    if (!film || !map) { this.layout(el); return; }
+    const w = map.width, h = map.height;
+    el.attrs.width = String(w); el.attrs.height = String(h);
+    this.layout(el);
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    el.canvas = c; el.dom.appendChild(c);
+    const frames = Math.max(1, Math.round(film.width / w));
+    const mapData = map.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, w, h).data;
+    const frac = () => {
+      const min = this.n(el, "min", 0), max = this.n(el, "max", 100), v = this.n(el, "value", min);
+      return max > min ? Math.max(0, Math.min(1, (v - min) / (max - min))) : 0;
+    };
+    el.paint = () => {
+      const ctx = c.getContext("2d")!;
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(film, Math.round(frac() * (frames - 1)) * w, 0, w, h, 0, 0, w, h);
+    };
+    el.paint();
+    /** The slider value under a point, or null outside the mapped area. */
+    const valueAt = (e: PointerEvent): number | null => {
+      const r = c.getBoundingClientRect();
+      const x = Math.floor(e.clientX - r.left), y = Math.floor(e.clientY - r.top);
+      if (x < 0 || y < 0 || x >= w || y >= h) return null;
+      const i = (y * w + x) * 4;
+      if (mapData[i] === key[0] && mapData[i + 1] === key[1] && mapData[i + 2] === key[2]) return null;
+      const min = this.n(el, "min", 0), max = this.n(el, "max", 100);
+      return min + (mapData[i] / 255) * (max - min);
+    };
+    const bound = BINDING.exec(a.value ?? "");
+    const live = a.value;
+    const commit = (v: number) => { if (bound?.[1].toLowerCase() === "wmpprop") this.scope.assign(bound[2].trim(), v); };
+    c.style.cursor = "pointer";
+    const move = (e: PointerEvent) => {
+      if (!el.dragging) return;
+      const v = valueAt(e);
+      if (v === null) return;
+      el.attrs.value = String(v);
+      el.paint();
+      commit(v);
+      this.fire(el, "value_onchange"); this.fire(el, "onchange");
+    };
+    c.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || !this.isEnabled(el) || valueAt(e) === null) return;
+      e.stopPropagation(); c.setPointerCapture(e.pointerId);
+      el.dragging = true;
+      this.fire(el, "onmousedown");
+      move(e);
+    });
+    c.addEventListener("pointermove", move);
+    c.addEventListener("pointerup", () => {
+      if (!el.dragging) return;
+      el.dragging = false;
+      this.fire(el, "onmouseup"); this.fire(el, "ondragend"); this.fire(el, "onendchange");
+      if (bound && live !== undefined) el.attrs.value = live;
+      el.paint();
+    });
+  }
+
+  private async buildSlider(el: El) {
+    if (el.tag === "customslider" && el.attrs.positionimage && !el.attrs.thumbimage) return this.buildFilmstripSlider(el);
+    const a = el.attrs;
+    const key = this.keysFor(el);
     // WMP calls the track `backgroundImage` on sliders; `image` is accepted too
     const [track, fore, pos, thumb, thumbHover, thumbDown] = await Promise.all(
       [a.backgroundimage ? "backgroundimage" : "image", "foregroundimage", "positionimage", "thumbimage", "thumbhoverimage", "thumbdownimage"].map((k) => this.images.load(a[k], key)),
@@ -760,13 +916,15 @@ export class SkinWindow {
           return /^(set|add|remove|clear|select|refresh|show|hide|focus|insert|delete)[a-z]/.test(key) ? () => {} : undefined;
         }
         if (BOOL_KEYS.has(key)) return truthy(v);
-        if (NUM_KEYS.has(key) || /^-?\d+(\.\d+)?$/.test(v)) return num(v);
+        // `value` is a number only when it looks like one: text elements keep their strings
+        if (/^\s*-?\d+(\.\d+)?\s*$/.test(v) || (NUM_KEYS.has(key) && key !== "value")) return num(v);
         return v;
       },
       set(_t, k, v) {
         if (typeof k !== "string") return true;
         const key = k.toLowerCase();
         el.attrs[key] = typeof v === "boolean" ? String(v) : String(v);
+        if (IMAGE_KEYS.has(key) && el.reloadImages) void el.reloadImages();
         if (key === "currentpreset" && el.tag === "effects") el.preset = num(v) % EFFECT_PRESETS.length;
         if (["left", "top", "width", "height", "visible", "zindex", "alphablend"].includes(key)) {
           el.dom.style.transition = "";
@@ -810,17 +968,29 @@ export class SkinWindow {
     off.width = W; off.height = H;
     const ctx = off.getContext("2d", { willReadFrequently: true })!;
     const origin = this.root.getBoundingClientRect();
-    const visit = (e: El) => {
+    type Box = { l: number; t: number; r: number; b: number };
+    const rel = (r: DOMRect): Box => ({ l: r.left - origin.left, t: r.top - origin.top, r: r.right - origin.left, b: r.bottom - origin.top });
+    const cut = (a: Box, b: Box): Box => ({ l: Math.max(a.l, b.l), t: Math.max(a.t, b.t), r: Math.min(a.r, b.r), b: Math.min(a.b, b.b) });
+    const visit = (e: El, clip: Box) => {
       if (e.dom.style.display === "none") return;
-      const r = (e.dom === this.root ? this.root : e.dom).getBoundingClientRect();
+      const r = rel(e.dom.getBoundingClientRect());
       const op = parseFloat(e.dom.style.opacity || "1");
       if (op <= 0.01) return;
-      if (e.canvas) ctx.drawImage(e.canvas, e.canvas.getBoundingClientRect().left - origin.left, e.canvas.getBoundingClientRect().top - origin.top);
-      else if (e !== this.viewEl && (e.tag === "text" || e.tag === "playlist" || e.tag === "effects")) ctx.fillRect(r.left - origin.left, r.top - origin.top, r.width, r.height);
-      else if (e.tag === "subview" && e.attrs.backgroundcolor) ctx.fillRect(r.left - origin.left, r.top - origin.top, r.width, r.height);
-      e.kids.forEach(visit);
+      const hereClip = e !== this.viewEl && e.dom.style.overflow === "hidden" ? cut(clip, r) : clip;
+      if (e.canvas) {
+        const cr = rel(e.canvas.getBoundingClientRect());
+        ctx.save();
+        ctx.beginPath(); ctx.rect(hereClip.l, hereClip.t, Math.max(0, hereClip.r - hereClip.l), Math.max(0, hereClip.b - hereClip.t)); ctx.clip();
+        ctx.drawImage(e.canvas, cr.l, cr.t);
+        if (e.hitMask) ctx.drawImage(e.hitMask, cr.l, cr.t);
+        ctx.restore();
+      } else if (e !== this.viewEl && (e.tag === "text" || e.tag === "playlist" || e.tag === "effects" || (e.tag === "subview" && e.attrs.backgroundcolor))) {
+        const f = cut(hereClip, r);
+        ctx.fillRect(f.l, f.t, Math.max(0, f.r - f.l), Math.max(0, f.b - f.t));
+      }
+      e.kids.forEach((k) => visit(k, hereClip));
     };
-    visit(this.viewEl);
+    visit(this.viewEl, { l: 0, t: 0, r: W, b: H });
     const data = ctx.getImageData(0, 0, W, H).data;
     const out: number[][] = [];
     let prevKey = "";

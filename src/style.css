@@ -24,3 +24,7 @@ html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; u
 .ctx-item { padding: 4px 12px; cursor: pointer; }
 .ctx-item:hover { background: #376; }
 .ctx-item.sep { border-top: 1px solid #3a6; margin-top: 3px; padding-top: 6px; }
+
+/* WMP passThrough elements ignore the mouse themselves, but their own children still work */
+.skin-el.pass { pointer-events: none; }
+.skin-el.pass > .skin-el { pointer-events: auto; }

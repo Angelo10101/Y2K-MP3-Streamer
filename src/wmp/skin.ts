@@ -15,6 +15,19 @@ export interface Skin {
 
 const norm = (p: string) => p.replace(/\\/g, "/").replace(/^\.?\//, "").toLowerCase();
 
+/**
+ * The view to show. WMP 11 skins start with a `previewView` (the thumbnail in the skin chooser)
+ * and a `controlView` before the real `mainView`; older skins just have one view.
+ */
+export function pickMainView(views: WmsNode[]): WmsNode {
+  const id = (v: WmsNode) => (v.attrs.id ?? "").toLowerCase();
+  return (
+    views.find((v) => id(v) === "mainview") ??
+    views.find((v) => !/preview|control/.test(id(v)) && v.attrs.width) ??
+    views[0]
+  );
+}
+
 export function loadSkin(name: string, zip: Uint8Array): Skin {
   const raw = unzipSync(zip);
   const files = new Map<string, Uint8Array>();

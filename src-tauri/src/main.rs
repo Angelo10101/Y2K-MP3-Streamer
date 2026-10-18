@@ -7,6 +7,8 @@ mod mpris;
 mod pear;
 mod player;
 mod skins;
+#[cfg(target_os = "linux")]
+mod x11tweaks;
 #[cfg(windows)]
 mod viz_win;
 #[cfg(windows)]
@@ -66,6 +68,19 @@ async fn queue_select(index: usize) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || pear::select(index)).await.map_err(|e| e.to_string())?
 }
 
+#[derive(serde::Serialize)]
+struct StartupOptions {
+    /// `RETRO_SKIN=Goo` (or `Goo.wmz`): open this skin's player straight away (development aid)
+    skin: Option<String>,
+    /// `RETRO_DEBUG=1`: log which skin elements are under every click
+    debug: bool,
+}
+
+#[tauri::command]
+fn startup_options() -> StartupOptions {
+    StartupOptions { skin: std::env::var("RETRO_SKIN").ok().filter(|s| !s.is_empty()), debug: std::env::var_os("RETRO_DEBUG").is_some() }
+}
+
 /// Restricts mouse input to the given `[x, y, w, h]` rectangles (the opaque part
 /// of the skin) so clicks on transparent regions fall through to windows below.
 #[tauri::command]
@@ -107,6 +122,7 @@ fn main() {
             player_state,
             player_cmd,
             set_input_shape,
+            startup_options,
             pear_start,
             pear_hide,
             pear_show,
@@ -134,6 +150,8 @@ fn main() {
             tauri::async_runtime::spawn(viz_win::run(handle));
             #[cfg(not(any(target_os = "linux", windows)))]
             let _ = handle.emit("viz-status", serde_json::json!({ "available": false, "reason": "no audio capture on this platform" }));
+            #[cfg(target_os = "linux")]
+            std::thread::spawn(x11tweaks::mark_no_shadow);
             // A utility-type window floats under tiling WMs (i3, sway) instead of being tiled.
             #[cfg(target_os = "linux")]
             if let Some(w) = app.get_webview_window("main") {
