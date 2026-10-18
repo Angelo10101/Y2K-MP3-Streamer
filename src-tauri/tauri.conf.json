@@ -18,9 +18,10 @@
         "height": 320,
         "decorations": false,
         "transparent": true,
-        "resizable": false,
+        "resizable": true,
         "shadow": false,
-        "center": true
+        "center": true,
+        "visible": false
       }
     ],
     "security": { "csp": null }

@@ -45,14 +45,16 @@ impl Mpris {
     /// Finds the YouTube Music player on the bus. `RETRO_MPRIS_PLAYER` overrides the
     /// substring that is matched (case-insensitive) against the bus name.
     async fn find_player(&self) -> zbus::Result<Option<String>> {
-        let wanted = std::env::var("RETRO_MPRIS_PLAYER")
-            .unwrap_or_else(|_| "youtube".into())
-            .to_lowercase();
+        // The app was renamed from "YouTube Music" to "Pear Desktop"; accept either.
+        let wanted: Vec<String> = match std::env::var("RETRO_MPRIS_PLAYER") {
+            Ok(w) => vec![w.to_lowercase()],
+            Err(_) => vec!["youtube".into(), "pear".into()],
+        };
         let names = DBusProxy::new(&self.conn).await?.list_names().await?;
         Ok(names
             .into_iter()
             .map(|n| n.to_string())
-            .find(|n| n.starts_with(PREFIX) && n.to_lowercase().contains(&wanted)))
+            .find(|n| n.starts_with(PREFIX) && wanted.iter().any(|w| n.to_lowercase().contains(w.as_str()))))
     }
 
     async fn player_proxy(&self, name: &str) -> zbus::Result<Proxy<'static>> {
@@ -62,7 +64,7 @@ impl Mpris {
     pub async fn snapshot(&self) -> PlayerState {
         let name = match self.find_player().await {
             Ok(Some(n)) => n,
-            Ok(None) => return PlayerState { status: "Stopped".into(), ..Default::default() },
+            Ok(None) => return PlayerState { status: "Stopped".into(), volume: 1.0, ..Default::default() },
             Err(e) => {
                 return PlayerState {
                     status: "Stopped".into(),

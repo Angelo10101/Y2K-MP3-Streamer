@@ -70,6 +70,15 @@ fn main() {
                 }
             });
             tauri::async_runtime::spawn(cava::run(handle));
+            // A utility-type window floats under tiling WMs (i3, sway) instead of being tiled.
+            #[cfg(target_os = "linux")]
+            if let Some(w) = app.get_webview_window("main") {
+                use gtk::prelude::GtkWindowExt;
+                if let Ok(g) = w.gtk_window() {
+                    g.set_type_hint(gtk::gdk::WindowTypeHint::Utility);
+                }
+                let _ = w.show();
+            }
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -16,7 +16,7 @@ YouTube Music desktop app  --MPRIS/D-Bus-->  Tauri backend (Rust)  --events-->  
   (login, streaming, ads)                       zbus + cava                      .wmz/.wms + JScript shim
 ```
 
-- **Playback engine:** [th-ch/youtube-music](https://github.com/th-ch/youtube-music) runs in the background. This app never talks to YouTube.
+- **Playback engine:** [th-ch's YouTube Music desktop app (now called [Pear Desktop](https://github.com/pear-devs/pear-desktop)) runs in the background. This app never talks to YouTube.
 - **Control:** play/pause/stop/next/previous, seek, volume, shuffle/repeat and track metadata over MPRIS.
 - **Skins:** real Windows Media Player `.wmz` skins are unzipped, their `.wms` layout is parsed and rendered, and the skin's own JScript runs against a `player.*` shim that maps onto MPRIS.
 - **Visualizer:** [cava](https://github.com/karlstav/cava) reads PipeWire and streams bar data to the skin's effects area.
@@ -26,7 +26,7 @@ YouTube Music desktop app  --MPRIS/D-Bus-->  Tauri backend (Rust)  --events-->  
 1. System packages:
    ```sh
    sudo pacman -S --needed base-devel webkit2gtk-4.1 gtk3 librsvg rust nodejs npm cava
-   yay -S youtube-music-bin        # the playback engine (AUR)
+   yay -S pear-desktop-bin         # the playback engine, formerly youtube-music-bin (AUR)
    ```
    `cava` is optional (no visualizer without it). Other distros: see the [Tauri 2 prerequisites](https://tauri.app/start/prerequisites/#linux).
 2. Clone and install JS dependencies:
@@ -37,7 +37,7 @@ YouTube Music desktop app  --MPRIS/D-Bus-->  Tauri backend (Rust)  --events-->  
 3. **Add a skin.** Skins are copyrighted and are *not* in this repo (`skins/` is gitignored). Put `.wmz` files in `skins/`, e.g. `skins/Headspace.wmz`. Old WMP skins are collected at the [Internet Archive](https://archive.org/details/windowsmediaplayerskinscollection).
    - Skins are searched for in `$RETRO_SKINS_DIR`, `./skins`, next to the executable, then `~/.local/share/retro-mp3-yt-music/skins`.
    - To try the app without a real skin: `python3 scripts/make_test_skin.py` generates a small original `skins/TestSkin.wmz`.
-4. Start **YouTube Music** (`youtube-music`), log in and play something. In its settings, make sure the MPRIS/"shortcuts" plugin is enabled so it appears on D-Bus.
+4. Start **Pear Desktop / YouTube Music**, log in and play something. It must appear on D-Bus: `playerctl -l` should list it. If it doesn't, enable its MPRIS support (the Shortcuts plugin) in its settings.
 5. Run this app:
    ```sh
    npm run tauri dev        # development
@@ -48,7 +48,10 @@ YouTube Music desktop app  --MPRIS/D-Bus-->  Tauri backend (Rust)  --events-->  
 ### Using it
 - Drag the skin body to move the window. Buttons, sliders and the visualizer behave as the skin defines.
 - With no skins (or a skin that fails to load) a plain control panel is shown with a message explaining where to put skins; with several skins it has a skin chooser (the last choice is remembered).
-- Check that the player is visible to MPRIS: `playerctl -l` should list a `youtube-music` entry. Set `RETRO_MPRIS_PLAYER=<substring>` if yours is named differently.
+- Check that the player is visible to MPRIS: bus names containing `youtube` or `pear` are matched. Set `RETRO_MPRIS_PLAYER=<substring>` if yours is named differently.
+
+### Tiling window managers (i3, sway)
+The window sets a utility type hint so i3 floats it automatically. If yours still tiles it, add `for_window [class="Retro-mp3-yt-music"] floating enable` to your i3 config. The window has no titlebar; drag the skin body to move it.
 
 ### Window transparency
 The window is frameless and transparent. You need a compositing manager for the transparent parts to look right: KDE Plasma has one built in; on i3 run e.g. `picom -b`. Without a compositor the transparent areas render black.
@@ -83,6 +86,8 @@ Implemented subset of the WMP skin object model:
 - Seeking uses MPRIS `SetPosition`, falling back to relative `Seek`.
 
 ## Development
+No YouTube Music app handy? `python3 scripts/fake_mpris.py` registers a fake player on D-Bus (needs `python-dbus` and `python-gobject`).
+
 ```sh
 npm test                    # unit tests (WMS parser)
 node_modules/.bin/tsc --noEmit
