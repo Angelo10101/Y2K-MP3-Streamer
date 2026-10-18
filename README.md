@@ -48,7 +48,7 @@ YouTube Music desktop app  --MPRIS/D-Bus-->  Tauri backend (Rust)  --events-->  
 ### Using it
 - Drag the skin body to move the window. Buttons, sliders and the visualizer behave as the skin defines.
 - With no skins (or a skin that fails to load) a plain control panel is shown with a message explaining where to put skins; with several skins it has a skin chooser (the last choice is remembered).
-- Check that the player is visible to MPRIS: bus names containing `youtube` or `pear` are matched. Set `RETRO_MPRIS_PLAYER=<substring>` if yours is named differently.
+- Check that the player is visible to MPRIS: bus names containing `youtube` or `pear` are preferred; if there are none, the app falls back to any other MPRIS player (e.g. YouTube Music open in a browser), preferring one that is playing. Set `RETRO_MPRIS_PLAYER=<substring>` if yours is named differently.
 
 ### Tiling window managers (i3, sway)
 The window sets a utility type hint so i3 floats it automatically. If yours still tiles it, add `for_window [class="Retro-mp3-yt-music"] floating enable` to your i3 config. The window has no titlebar; drag the skin body to move it.

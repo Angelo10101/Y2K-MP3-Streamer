@@ -50,11 +50,32 @@ impl Mpris {
             Ok(w) => vec![w.to_lowercase()],
             Err(_) => vec!["youtube".into(), "pear".into()],
         };
-        let names = DBusProxy::new(&self.conn).await?.list_names().await?;
-        Ok(names
+        let names: Vec<String> = DBusProxy::new(&self.conn)
+            .await?
+            .list_names()
+            .await?
             .into_iter()
             .map(|n| n.to_string())
-            .find(|n| n.starts_with(PREFIX) && wanted.iter().any(|w| n.to_lowercase().contains(w.as_str()))))
+            .filter(|n| n.starts_with(PREFIX))
+            .collect();
+        let preferred = names.iter().find(|n| wanted.iter().any(|w| n.to_lowercase().contains(w.as_str())));
+        if preferred.is_some() || std::env::var("RETRO_MPRIS_PLAYER").is_ok() {
+            return Ok(preferred.cloned());
+        }
+        // Fallback: any other player (e.g. YouTube Music open in a browser), preferring one
+        // that is currently playing. playerctld is only a proxy and is skipped.
+        let mut fallback = None;
+        for n in names.iter().filter(|n| !n.contains("playerctld")) {
+            let status: String = match self.player_proxy(n).await {
+                Ok(p) => p.get_property("PlaybackStatus").await.unwrap_or_default(),
+                Err(_) => continue,
+            };
+            if status == "Playing" {
+                return Ok(Some(n.clone()));
+            }
+            fallback.get_or_insert_with(|| n.clone());
+        }
+        Ok(fallback)
     }
 
     async fn player_proxy(&self, name: &str) -> zbus::Result<Proxy<'static>> {
