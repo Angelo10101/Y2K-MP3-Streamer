@@ -48,6 +48,14 @@ export class PlayerShim {
 
   update(s: PlayerState) {
     const prev = this.state;
+    // While playing, keep our own clock and only ease towards the reported position. Players
+    // report it coarsely, so snapping to every poll makes the seek slider jitter. Real seeks
+    // (large differences), track changes and pauses still snap.
+    if (prev.status === "Playing" && s.status === "Playing" && prev.track_id === s.track_id) {
+      const est = this.position;
+      const diff = s.position_s - est;
+      if (Math.abs(diff) < 1.5) s = { ...s, position_s: est + diff * 0.15 };
+    }
     this.state = s;
     this.stateAt = performance.now();
     if (prev.status !== s.status) this.emit("playstatechange", this.playState);
