@@ -62,6 +62,9 @@ YouTube Music desktop app  --MPRIS/D-Bus-->  Tauri backend (Rust)  --events-->  
 ### Tiling window managers (i3, sway)
 The window sets a utility type hint so i3 floats it automatically. If yours still tiles it, add `for_window [class="Retro-mp3-yt-music"] floating enable` to your i3 config. The window has no titlebar; drag the skin body to move it.
 
+### Rendering stalls (window only updates when hovered)
+On hybrid AMD/NVIDIA laptops WebKitGTK's GPU buffer path can stop presenting frames until an input event arrives. The app therefore starts WebKit in software-compositing mode (`WEBKIT_DISABLE_DMABUF_RENDERER=1`, `WEBKIT_DISABLE_COMPOSITING_MODE=1`), which is plenty for a 2D skin. Set `RETRO_WEBKIT_GPU=1` to keep WebKit's defaults.
+
 ### Window transparency
 The window is frameless and transparent. You need a compositing manager for the transparent parts to look right: KDE Plasma has one built in; on i3 run e.g. `picom -b`. Without a compositor the transparent areas render black.
 

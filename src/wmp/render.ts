@@ -90,6 +90,7 @@ export class SkinWindow {
     Object.assign(this.root.style, { position: "relative", width: `${w}px`, height: `${h}px`, overflow: "hidden", isolation: "isolate" });
     this.host.replaceChildren(this.root);
     this.hooks.resize(w, h);
+    this.maxW = w; this.maxH = h;
 
     this.viewEl = new El(this.view, null);
     this.viewEl.dom = this.root as HTMLDivElement;
@@ -178,9 +179,19 @@ export class SkinWindow {
       }, ms);
     }
   }
+  private maxW = 0;
+  private maxH = 0;
+  /**
+   * Skins resize their view when drawers open/close (Headspace: 549 <-> 760 wide). The window
+   * only ever grows: shrinking it after the drawer animation made the window jump, and the extra
+   * area is transparent and click-through anyway (input shape), so nothing is lost.
+   */
   private resizeView(w: number, h: number) {
-    Object.assign(this.root.style, { width: `${w}px`, height: `${h}px` });
-    this.hooks.resize(w, h);
+    if (w <= this.maxW && h <= this.maxH) return;
+    this.maxW = Math.max(this.maxW, w);
+    this.maxH = Math.max(this.maxH, h);
+    Object.assign(this.root.style, { width: `${this.maxW}px`, height: `${this.maxH}px` });
+    this.hooks.resize(this.maxW, this.maxH);
     this.scheduleShape();
   }
 

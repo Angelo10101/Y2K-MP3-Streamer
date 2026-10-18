@@ -18,6 +18,16 @@ let prev: PlayerState = emptyState;
 let pearMessage: string | undefined;
 let onTop = false;
 
+/** Forces the webview to repaint (after resizes / content swaps it can keep showing a stale frame). */
+function nudgeRepaint() {
+  for (const delay of [0, 120, 400]) {
+    setTimeout(() => {
+      app.style.transform = "translateZ(0)";
+      requestAnimationFrame(() => { app.style.transform = ""; });
+    }, delay);
+  }
+}
+
 const win = async () => (await import("@tauri-apps/api/window")).getCurrentWindow();
 
 const hooks: WindowHooks = {
@@ -106,6 +116,7 @@ async function showHome(message?: string) {
     void setInputShape([[0, 0, 420, 430]]);
     await w.show();
   }
+  nudgeRepaint();
 }
 
 /** Returns false if the skin failed to load (the home screen is shown instead). */
@@ -119,6 +130,7 @@ async function openSkin(name: string): Promise<boolean> {
     await current.mount();
     localStorage.setItem("skin", name);
     (window as unknown as { __skins: unknown }).__skins = { skin, current };
+    nudgeRepaint();
     return true;
   } catch (e) {
     console.error(e);
@@ -176,4 +188,12 @@ document.addEventListener("contextmenu", (e) => {
     pearMessage = status.message ?? undefined;
   }
   await showHome();
+  // Pear may have been left hidden by a previous run (player mode); bring it back. Right
+  // after a fresh launch it isn't on D-Bus yet, so retry for a while.
+  if (inTauri) {
+    for (let i = 0; i < 15 && mode === "home"; i++) {
+      if (await pearShow().then(() => true, () => false)) break;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
 })();

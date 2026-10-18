@@ -79,6 +79,17 @@ fn set_input_shape(window: tauri::WebviewWindow, rects: Vec<[i32; 4]>) -> Result
 }
 
 fn main() {
+    // WebKitGTK's DMABUF/GPU compositing path stops presenting frames on some hybrid-GPU
+    // setups (window only repaints on input events). Software compositing is plenty for
+    // a 2D skin. Set RETRO_WEBKIT_GPU=1 to keep WebKit's defaults.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("RETRO_WEBKIT_GPU").is_none() {
+        for k in ["WEBKIT_DISABLE_DMABUF_RENDERER", "WEBKIT_DISABLE_COMPOSITING_MODE"] {
+            if std::env::var_os(k).is_none() {
+                std::env::set_var(k, "1");
+            }
+        }
+    }
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             player_state,

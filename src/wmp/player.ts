@@ -38,6 +38,7 @@ export class PlayerShim {
   private stateAt = performance.now();
   private listeners: ((e: PlayerEvent, arg?: number) => void)[] = [];
   private muted = false;
+  private volHoldUntil = 0;
   private volBeforeMute = 100;
   private local = { balance: 0, rate: 1, eq: 0 };
   bars: number[] = [];
@@ -56,6 +57,8 @@ export class PlayerShim {
       const diff = s.position_s - est;
       if (Math.abs(diff) < 1.5) s = { ...s, position_s: est + diff * 0.15 };
     }
+    // a volume we just set may not be reflected by the next polls yet
+    if (performance.now() < this.volHoldUntil) s = { ...s, volume: prev.volume };
     this.state = s;
     this.stateAt = performance.now();
     if (prev.status !== s.status) this.emit("playstatechange", this.playState);
@@ -80,6 +83,7 @@ export class PlayerShim {
   }
   private setVolume(v: number) {
     v = Math.max(0, Math.min(100, v));
+    this.volHoldUntil = performance.now() + 1500;
     this.state = { ...this.state, volume: v / 100 };
     void playerCmd("volume", v / 100);
   }

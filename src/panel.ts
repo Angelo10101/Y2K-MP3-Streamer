@@ -16,6 +16,8 @@ export interface PanelInfo {
 export class Panel {
   el = document.createElement("div");
   private seeking = false;
+  private volDragging = false;
+  private volHoldUntil = 0;
   private last?: PlayerState;
   private $: Record<string, HTMLElement> = {};
 
@@ -50,7 +52,15 @@ export class Panel {
     const seek = this.$.seek as HTMLInputElement;
     seek.addEventListener("pointerdown", () => (this.seeking = true));
     seek.addEventListener("change", () => { this.seeking = false; void playerCmd("seek_to", Number(seek.value)); });
-    this.$.vol.addEventListener("input", () => playerCmd("volume", Number((this.$.vol as HTMLInputElement).value) / 100));
+    // while the user is dragging (and briefly after), polled values must not move the slider back
+    this.$.vol.addEventListener("pointerdown", () => {
+      this.volDragging = true;
+      window.addEventListener("pointerup", () => { this.volDragging = false; this.volHoldUntil = performance.now() + 1500; }, { once: true });
+    });
+    this.$.vol.addEventListener("input", () => {
+      this.volHoldUntil = performance.now() + 1500;
+      void playerCmd("volume", Number((this.$.vol as HTMLInputElement).value) / 100);
+    });
   }
 
   update(s: PlayerState) {
@@ -71,7 +81,7 @@ export class Panel {
     if (!this.seeking) seek.value = String(s.position_s);
     this.$.pos.textContent = fmtTime(s.position_s);
     this.$.len.textContent = fmtTime(s.length_s);
-    (this.$.vol as HTMLInputElement).value = String(Math.round(s.volume * 100));
+    if (!this.volDragging && performance.now() > this.volHoldUntil) (this.$.vol as HTMLInputElement).value = String(Math.round(s.volume * 100));
   }
 
   bars(b: number[]) {
