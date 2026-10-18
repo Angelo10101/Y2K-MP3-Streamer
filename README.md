@@ -47,6 +47,7 @@ YouTube Music desktop app  --MPRIS/D-Bus-->  Tauri backend (Rust)  --events-->  
 
 ### Using it
 - Drag the skin body to move the window. Buttons, sliders and the visualizer behave as the skin defines.
+- **Right-click** the skin for the menu: choose a skin, toggle always-on-top, open the plain control panel, or quit.
 - With no skins (or a skin that fails to load) a plain control panel is shown with a message explaining where to put skins; with several skins it has a skin chooser (the last choice is remembered).
 - Check that the player is visible to MPRIS: bus names containing `youtube` or `pear` are preferred; if there are none, the app falls back to any other MPRIS player (e.g. YouTube Music open in a browser), preferring one that is playing. Set `RETRO_MPRIS_PLAYER=<substring>` if yours is named differently.
 
@@ -56,7 +57,7 @@ The window sets a utility type hint so i3 floats it automatically. If yours stil
 ### Window transparency
 The window is frameless and transparent. You need a compositing manager for the transparent parts to look right: KDE Plasma has one built in; on i3 run e.g. `picom -b`. Without a compositor the transparent areas render black.
 
-Clicks on transparent parts of the skin should fall through to the window below (GTK input shape region). This works on X11; on Wayland GTK3 maps it to the surface input region, which should also work but is less tested. If it misbehaves on Wayland, run through XWayland: `GDK_BACKEND=x11 npm run tauri dev`.
+Clicks on transparent parts of the skin fall through to the window below (GTK input shape region). Verified on X11 (i3 + picom); on Wayland GTK3 maps it to the surface input region, which should also work but is less tested. If it misbehaves on Wayland, run through XWayland: `GDK_BACKEND=x11 npm run tauri dev`.
 
 ## Skin support
 
@@ -67,6 +68,7 @@ Implemented subset of the WMP skin object model:
 | `view` (size, `backgroundImage`, `clippingColor`/`clippingImage` window shape) | yes |
 | `subview` (nesting, visibility, `transparencyColor`, move/alpha animation via `moveTo`/`alphaBlendTo`) | yes |
 | `buttonelement` / `button` with hover/down/disabled images | yes |
+| WMP's special buttons (`prevelement`, `playelement`, `stopelement`, `nextelement`, `pausebutton`, mute/shuffle/repeat/ff/rw) with built-in actions and automatic enabled state | yes |
 | `buttongroup` with `mappingImage` hit-testing | yes |
 | `slider` / `customslider` (thumb, foreground/position image, vertical, `borderSize`) | yes |
 | `text` (`wmpprop:` bindings, scrolling, fonts, justification) | yes |
@@ -74,11 +76,17 @@ Implemented subset of the WMP skin object model:
 | `playlist` | current track only (see limitations) |
 | `wmpprop:` / `wmpenabled:` / `wmpdisabled:` bindings | yes |
 | Theme JScript (`scriptFile`, inline `jscript:` handlers) | yes, best effort |
-| `video`, `equalizersettingsctrl`, `vbscript:` | no (placeholders / ignored) |
+| attribute expressions (`left="jscript:a.left+10;"`), `scriptFile` lists (`res://` DLL entries are replaced by built-in constants), case-insensitive `player.*` names | yes |
+| `video`, `vbscript:` | no (placeholders / ignored) |
 
 `player.*` shim: `controls.*`, `currentMedia.*` (`name`, `duration`, `getItemInfo`), `settings.volume/mute/getMode/setMode`, `playState`, `status`, `currentPlaylist` (one item). Player events `onplaystatechange` / `onmediachange` / `onopenstatechange` are dispatched to elements that declare them and to same-named global script functions.
 
+## Tested skins
+- **Headspace** (WMP 7-10): head shape, transport controls with enabled/disabled states, pause/play swap, seek and volume sliders, visualizer in the head's screen with a preset chooser, sliding EQ and playlist drawers, minimize/close. The EQ and balance sliders move but do nothing.
+- A generated `TestSkin.wmz` (`scripts/make_test_skin.py`).
+
 ## Known limitations
+- **Visualizer presets** are our own (bars, mirror, scope, dots), not WMP's effect plugins; **video** isn't supported (YouTube Music plays audio).
 - **EQ, balance, playback rate:** rendered and animated but they do nothing, since MPRIS has no equivalent.
 - **Playlist:** YouTube Music's MPRIS doesn't expose the queue, so the playlist element shows only the current track.
 - **Skin scripts are untrusted code.** They run in a restricted scope (only a small allow-list of JS globals plus `player`, `view`, `theme` and the skin's elements), but this is best effort, not a security boundary. Only install skins you trust.

@@ -9,6 +9,25 @@ export function fmtTime(sec: number): string {
   return (h ? `${h}:${pad((sec % 3600) / 60)}` : `${Math.floor(sec / 60)}`) + `:${pad(sec % 60)}`;
 }
 
+/** The WMP object model is case-insensitive (`player.currentmedia.duration`); JS is not. */
+export function ci<T extends object>(o: T): T {
+  const real = (t: object, k: string | symbol) => {
+    if (typeof k !== "string" || k in t) return k;
+    const l = k.toLowerCase();
+    return Object.keys(t).concat(Object.getOwnPropertyNames(Object.getPrototypeOf(t) ?? {})).find((x) => x.toLowerCase() === l) ?? k;
+  };
+  return new Proxy(o, {
+    get(t, k) {
+      const v = Reflect.get(t, real(t, k), t);
+      return v && typeof v === "object" ? ci(v as object) : v;
+    },
+    set: (t, k, v) => Reflect.set(t, real(t, k), v, t),
+    has: (t, k) => Reflect.has(t, real(t, k)),
+  });
+}
+
+const asBool = (v: unknown) => (typeof v === "string" ? !/^(false|0|no|)$/i.test(v) : !!v);
+
 export type PlayerEvent = "playstatechange" | "mediachange" | "openstatechange";
 
 // wmppsXxx play states
@@ -58,7 +77,7 @@ export class PlayerShim {
   }
 
   // ---- the public `player` object handed to skin scripts ----
-  readonly api = (() => {
+  readonly api = ci((() => {
     const self = this;
     const item = () => ({
       get name() { return self.state.title; },
@@ -93,16 +112,25 @@ export class PlayerShim {
         set currentPosition(v: number) { self.seekTo(Number(v)); },
         get currentPositionString() { return fmtTime(self.position); },
         get currentItem() { return item(); },
-        isAvailable: (what: string) => self.state.running || String(what).toLowerCase() === "play",
+        isAvailable(what: string) {
+          const st = self.state;
+          switch (String(what).toLowerCase()) {
+            case "play": return st.status !== "Playing";
+            case "pause": return st.running && st.status === "Playing";
+            case "stop": return st.running && st.status !== "Stopped";
+            default: return st.running; // next, previous, currentposition, fastforward ...
+          }
+        },
       },
       get currentMedia() { return item(); },
       settings: {
         get volume() { return self.muted ? 0 : Math.round(self.state.volume * 100); },
         set volume(v: number) { self.setVolume(Number(v)); },
         get mute() { return self.muted; },
-        set mute(m: boolean) {
+        set mute(v: boolean | string) {
+          const m = asBool(v);
           if (m === self.muted) return;
-          self.muted = !!m;
+          self.muted = m;
           if (self.muted) { self.volBeforeMute = Math.round(self.state.volume * 100); self.setVolume(0); }
           else self.setVolume(self.volBeforeMute);
         },
@@ -126,6 +154,11 @@ export class PlayerShim {
         },
         isAvailable: () => true,
       },
+      network: {
+        get downloadProgress() { return self.state.running && self.state.title ? 100 : 0; },
+        get bufferingProgress() { return 100; },
+        get bitRate() { return 0; },
+      },
       get playState() { return self.playState; },
       get openState() { return self.state.running ? 13 : 0; },
       get status() {
@@ -148,5 +181,5 @@ export class PlayerShim {
       // visualizer data, exposed for skins that look for it
       get bars() { return self.bars; },
     };
-  })();
+  })());
 }

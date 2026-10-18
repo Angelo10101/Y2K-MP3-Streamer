@@ -20,18 +20,19 @@ export class ImageStore {
   constructor(private skin: Skin) {}
 
   /** Loads `path` from the archive; pixels equal to `key` become transparent. */
-  load(path: string | undefined, key?: RGB | null): Promise<HTMLCanvasElement | null> {
+  load(path: string | undefined, keys?: RGB | (RGB | null)[] | null): Promise<HTMLCanvasElement | null> {
     if (!path) return Promise.resolve(null);
-    const id = `${path.toLowerCase()}|${key?.join(",") ?? ""}`;
+    const key: RGB[] = !keys ? [] : typeof keys[0] === "number" ? [keys as RGB] : (keys as (RGB | null)[]).filter((k): k is RGB => !!k);
+    const id = `${path.toLowerCase()}|${key.map((k) => k.join(",")).join(";")}`;
     let p = this.cache.get(id);
     if (!p) {
-      p = this.decode(path, key ?? null);
+      p = this.decode(path, key);
       this.cache.set(id, p);
     }
     return p;
   }
 
-  private async decode(path: string, key: RGB | null): Promise<HTMLCanvasElement | null> {
+  private async decode(path: string, keys: RGB[]): Promise<HTMLCanvasElement | null> {
     const bytes = this.skin.file(path);
     if (!bytes) { console.warn(`[skin] missing image ${path}`); return null; }
     const ext = path.split(".").pop()!.toLowerCase();
@@ -45,10 +46,12 @@ export class ImageStore {
       c.height = img.naturalHeight;
       const ctx = c.getContext("2d", { willReadFrequently: true })!;
       ctx.drawImage(img, 0, 0);
-      if (key) {
+      if (keys.length) {
         const d = ctx.getImageData(0, 0, c.width, c.height);
         for (let i = 0; i < d.data.length; i += 4) {
-          if (d.data[i] === key[0] && d.data[i + 1] === key[1] && d.data[i + 2] === key[2]) d.data[i + 3] = 0;
+          for (const key of keys) {
+            if (d.data[i] === key[0] && d.data[i + 1] === key[1] && d.data[i + 2] === key[2]) { d.data[i + 3] = 0; break; }
+          }
         }
         ctx.putImageData(d, 0, 0);
       }

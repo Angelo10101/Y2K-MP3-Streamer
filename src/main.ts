@@ -46,9 +46,48 @@ async function showPanel(message?: string) {
   }
 }
 
+let onTop = false;
+function closeMenu() { document.getElementById("ctx")?.remove(); }
+
+/** Right-click menu: skin chooser, always-on-top, control panel, quit. */
+async function openMenu(x: number, y: number) {
+  closeMenu();
+  const list = await listSkins();
+  const cur = localStorage.getItem("skin");
+  const m = document.createElement("div");
+  m.id = "ctx";
+  const item = (label: string, f: () => void, sep = false) => {
+    const d = document.createElement("div");
+    d.textContent = label;
+    d.className = "ctx-item" + (sep ? " sep" : "");
+    d.onpointerdown = (e) => e.stopPropagation();
+    d.onclick = () => { closeMenu(); f(); };
+    m.appendChild(d);
+  };
+  for (const n of list.skins) item(`${n === cur ? "✓ " : "   "}${n.replace(/\.wmz$/i, "")}`, () => void openSkin(n));
+  if (!list.skins.length) item(`no skins in ${list.dir}`, () => {});
+  item(`${onTop ? "✓ " : "   "}Always on top`, () => { onTop = !onTop; hooks.setAlwaysOnTop(onTop); }, true);
+  item("   Control panel", () => void showPanel());
+  item("   Quit", () => hooks.close());
+  document.body.appendChild(m);
+  const r = m.getBoundingClientRect();
+  m.style.left = `${Math.max(0, Math.min(x, innerWidth - r.width))}px`;
+  m.style.top = `${Math.max(0, Math.min(y, innerHeight - r.height))}px`;
+  // the menu must be clickable even where the skin is transparent
+  void setInputShape([[0, 0, innerWidth, innerHeight]]);
+  const off = (e: Event) => {
+    if ((e.target as HTMLElement).closest?.("#ctx")) return;
+    closeMenu(); document.removeEventListener("pointerdown", off, true);
+    (window as unknown as { __skins?: { current: SkinWindow } }).__skins?.current.scheduleShape(0);
+  };
+  document.addEventListener("pointerdown", off, true);
+}
+document.addEventListener("contextmenu", (e) => { e.preventDefault(); void openMenu(e.clientX, e.clientY); });
+
 export async function openSkin(name: string) {
   try {
     const skin = loadSkin(name, await readSkin(name));
+    closeMenu();
     current?.dispose();
     panel = undefined;
     current = new SkinWindow(skin, skin.views[0], player, app, hooks);

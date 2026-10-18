@@ -86,8 +86,8 @@ function togglePlay() {
 }
 function togglePanel() {
   panelOpen = !panelOpen;
-  if (panelOpen) { side.visible = true; side.left = 340; side.moveTo(230, 20, 0.25); }
-  else { side.moveTo(340, 20, 0.25); setTimeout("side.visible = false;", 300); }
+  if (panelOpen) { side.visible = true; side.left = 340; side.moveTo(230, 20, 250); }
+  else { side.moveTo(340, 20, 250); setTimeout("side.visible = false;", 300); }
 }
 '''
 
