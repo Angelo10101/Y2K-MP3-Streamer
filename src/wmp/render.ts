@@ -190,7 +190,8 @@ export class SkinWindow {
       get currentViewID() { return self.view.attrs.id ?? ""; },
       openView: () => {}, loadPreset: () => {}, savePreset: () => {}, close: () => this.hooks.close(),
       // skins remember their own settings (EQ presets, repeat, ...) between runs
-      loadPreference: (k: string) => { try { return localStorage.getItem(`pref:${this.skin.name}:${k}`) ?? ""; } catch { return ""; } },
+      // WMP returns "--" for a preference that was never saved; skins test for that exact string
+      loadPreference: (k: string) => { try { return localStorage.getItem(`pref:${this.skin.name}:${k}`) ?? "--"; } catch { return "--"; } },
       savePreference: (k: string, v: unknown) => { try { localStorage.setItem(`pref:${this.skin.name}:${k}`, String(v)); } catch { /* ignore */ } },
       // file dialogs are not supported: we never open media ourselves
       openDialog: () => "",
@@ -333,7 +334,9 @@ export class SkinWindow {
       if (!isNaN(h)) d.height = `${h}px`;
     }
     d.display = vis ? "" : "none";
-    const z = el.attrs.zindex; if (z !== undefined) d.zIndex = String(num(z));
+    // A playlist with a negative zindex (Tube Frame: -2) still draws above its subview's background
+    // image in WMP; here the background canvas would end up on top of it, so never go below 0.
+    const z = el.attrs.zindex; if (z !== undefined) d.zIndex = String(el.tag === "playlist" ? Math.max(0, num(z)) : num(z));
     const a = el.attrs.alphablend; if (a !== undefined) d.opacity = String(Math.max(0, Math.min(1, num(a, 255) / 255)));
   }
 

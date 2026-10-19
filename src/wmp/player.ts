@@ -180,9 +180,13 @@ export class PlayerShim {
       get URL() { return ""; },
       set URL(_v: string) { /* we never open media ourselves */ },
       currentPlaylist: {
-        get count() { return self.state.title ? 1 : 0; },
+        // next/previous/shuffle always work through the player, and skins disable them for a
+        // one-item playlist, so report "more than one" while something is loaded
+        get count() { return self.state.title ? 2 : 0; },
         get name() { return "Now Playing"; },
         item: () => item(),
+        // playlist-level attributes (title, moreinfo, abstract ...) don't exist for us
+        getItemInfo: () => "",
       },
       uiMode: "none",
       enableContextMenu: false,
