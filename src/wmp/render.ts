@@ -23,7 +23,9 @@ export interface WindowHooks {
 
 const num = (v: unknown, d = 0) => { const n = parseFloat(String(v)); return Number.isFinite(n) ? n : d; };
 const truthy = (v: unknown, d = true) => (v === undefined || v === "" ? d : !/^(false|0|no)$/i.test(String(v)));
-const colorOk = (c: string | undefined) => !!c && !/^\s*(none|transparent)\s*$/i.test(c);
+/** Keeps a press's drags on the control; a press re-aimed by `passDown` is synthetic and can't always be captured. */
+const capture = (c: HTMLElement, e: PointerEvent) => { try { c.setPointerCapture(e.pointerId); } catch { /* the press still works, drags just aren't captured */ } };
+const colorOk =(c: string | undefined) => !!c && !/^\s*(none|transparent)\s*$/i.test(c);
 /** WMP's own "return to full mode" button doubles as our Home button. */
 const isHomeButton = (el: { attrs: Record<string, string> }) => /returnToMediaCenter/i.test(el.attrs.onclick ?? "");
 const tipOf = (el: { attrs: Record<string, string> }) => (isHomeButton(el) ? `Home (${sourceName})` : el.attrs.uptooltip ?? "");
@@ -443,7 +445,7 @@ export class SkinWindow {
     c.addEventListener("pointerleave", () => { if (el.hover) { el.hover = false; el.paint(); this.fire(el, "onmouseout"); } });
     c.addEventListener("pointerdown", (e) => {
       if (e.button !== 0 || !hit(e) || !this.isEnabled(el)) return;
-      e.stopPropagation(); c.setPointerCapture(e.pointerId);
+      e.stopPropagation(); capture(c, e);
       el.down = true; el.paint(); this.fire(el, "onmousedown");
     });
     c.addEventListener("pointerup", (e) => {
@@ -473,6 +475,24 @@ export class SkinWindow {
       case "shuffle": (p.settings as { setMode(m: string, b: boolean): void }).setMode("shuffle", !this.player.state.shuffle); break;
       case "repeat": (p.settings as { setMode(m: string, b: boolean): void }).setMode("loop", this.player.state.loop_status === "None"); break;
     }
+  }
+
+  /**
+   * A click on a part of a button group that no button maps to belongs to whatever lies underneath
+   * (Israeli: a full-skin group sits above the volume dial), so re-aim the press at that element.
+   */
+  private passDown(c: HTMLElement, e: PointerEvent) {
+    const was = c.style.pointerEvents;
+    c.style.pointerEvents = "none";
+    const stack = document.elementsFromPoint(e.clientX, e.clientY);
+    c.style.pointerEvents = was;
+    // the group's own wrapper box still covers the skin; the first canvas below it is the control
+    const below = stack.slice(stack.indexOf(c.parentElement as Element) + 1);
+    const under = below.find((n) => n instanceof HTMLCanvasElement && this.root.contains(n));
+    if (!under) return;
+    e.stopPropagation();
+    const { clientX, clientY, screenX, screenY, button, buttons, pointerId, pointerType, isPrimary } = e;
+    under.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, composed: true, clientX, clientY, screenX, screenY, button, buttons, pointerId, pointerType, isPrimary }));
   }
 
   private async buildButtonGroup(el: El) {
@@ -553,8 +573,9 @@ export class SkinWindow {
     c.addEventListener("pointerleave", () => { if (!cur?.el.down) setHover(undefined); });
     c.addEventListener("pointerdown", (e) => {
       const k = at(...pos(e));
+      if (e.button === 0 && !k) return this.passDown(c, e);
       if (e.button !== 0 || !k || !this.isEnabled(k.el)) return;
-      e.stopPropagation(); c.setPointerCapture(e.pointerId);
+      e.stopPropagation(); capture(c, e);
       cur = k; k.el.down = true; k.el.hover = true; el.paint(); this.fire(k.el, "onmousedown");
     });
     c.addEventListener("pointerup", (e) => {
@@ -621,7 +642,7 @@ export class SkinWindow {
     };
     c.addEventListener("pointerdown", (e) => {
       if (e.button !== 0 || !this.isEnabled(el) || valueAt(e) === null) return;
-      e.stopPropagation(); c.setPointerCapture(e.pointerId);
+      e.stopPropagation(); capture(c, e);
       el.dragging = true;
       this.fire(el, "onmousedown");
       move(e);
@@ -712,7 +733,7 @@ export class SkinWindow {
     };
     c.addEventListener("pointerdown", (e) => {
       if (e.button !== 0 || !this.isEnabled(el)) return;
-      e.stopPropagation(); c.setPointerCapture(e.pointerId);
+      e.stopPropagation(); capture(c, e);
       el.dragging = true;
       this.fire(el, "onmousedown"); this.fire(el, "ondragbegin");
       move(e);
