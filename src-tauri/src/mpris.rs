@@ -1,6 +1,7 @@
 //! MPRIS (D-Bus) client for the YouTube Music desktop app (or Spotify, see `spotify.rs`).
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use crate::player::PlayerState;
 use zbus::zvariant::{ObjectPath, OwnedValue, Value};
@@ -13,11 +14,14 @@ const PLAYER_IFACE: &str = "org.mpris.MediaPlayer2.Player";
 #[derive(Clone)]
 pub struct Mpris {
     conn: Connection,
+    /// A non-Pear player (a browser tab) we started following because it was playing. We stay on it
+    /// while it is paused, so Play resumes that player instead of waking Pear's default song.
+    external: Arc<Mutex<Option<String>>>,
 }
 
 impl Mpris {
     pub async fn connect() -> zbus::Result<Self> {
-        Ok(Self { conn: Connection::session().await? })
+        Ok(Self { conn: Connection::session().await?, external: Arc::default() })
     }
 
     /// Finds the YouTube Music player on the bus. `RETRO_MPRIS_PLAYER` overrides the
@@ -39,8 +43,31 @@ impl Mpris {
             .filter(|n| n.starts_with(PREFIX))
             .collect();
         let preferred = names.iter().find(|n| wanted.iter().any(|w| n.to_lowercase().contains(w.as_str())));
-        // Playing other players (e.g. a browser tab) is opt-in: RETRO_MPRIS_ANY=1
-        if preferred.is_some() || std::env::var("RETRO_MPRIS_PLAYER").is_ok() || std::env::var("RETRO_MPRIS_ANY").is_err() {
+        let explicit = std::env::var("RETRO_MPRIS_PLAYER").is_ok();
+        let any = std::env::var("RETRO_MPRIS_ANY").is_ok();
+        // Pear starts with this app and sits idle on the bus; if something else (a browser tab) is
+        // the one playing, follow that instead so the controls act on the music you hear.
+        if !explicit {
+            if let Some(p) = preferred {
+                if self.status_of(p).await == "Playing" {
+                    *self.external.lock().unwrap() = None;
+                    return Ok(Some(p.clone()));
+                }
+            }
+            let kept = self.external.lock().unwrap().clone();
+            if let Some(k) = kept.filter(|k| names.contains(k)) {
+                return Ok(Some(k));
+            }
+            for n in names.iter().filter(|n| !n.contains("playerctld") && Some(*n) != preferred) {
+                if self.status_of(n).await == "Playing" {
+                    *self.external.lock().unwrap() = Some(n.clone());
+                    return Ok(Some(n.clone()));
+                }
+            }
+            *self.external.lock().unwrap() = None;
+        }
+        // Using an idle non-preferred player (nothing playing anywhere) is opt-in: RETRO_MPRIS_ANY=1
+        if preferred.is_some() || explicit || !any {
             return Ok(preferred.cloned());
         }
         // Fallback: any other player (e.g. YouTube Music open in a browser), preferring one
@@ -57,6 +84,19 @@ impl Mpris {
             fallback.get_or_insert_with(|| n.clone());
         }
         Ok(fallback)
+    }
+
+    /// True when a player other than Pear is the one we are following (so Pear need not be started).
+    pub async fn external_active(&self) -> bool {
+        let _ = self.find_player().await;
+        self.external.lock().unwrap().is_some()
+    }
+
+    async fn status_of(&self, name: &str) -> String {
+        match self.player_proxy(name).await {
+            Ok(p) => p.get_property("PlaybackStatus").await.unwrap_or_default(),
+            Err(_) => String::new(),
+        }
     }
 
     async fn player_proxy(&self, name: &str) -> zbus::Result<Proxy<'static>> {

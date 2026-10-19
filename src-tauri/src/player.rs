@@ -58,6 +58,15 @@ impl Player {
         Player::Api(PearApi::new())
     }
 
+    /// Another player (e.g. a browser tab) is already playing, so Pear should not be started.
+    pub async fn external_active(&self) -> bool {
+        match self {
+            #[cfg(target_os = "linux")]
+            Player::Mpris(m) => m.external_active().await,
+            _ => false,
+        }
+    }
+
     pub async fn snapshot(&self) -> PlayerState {
         match self {
             #[cfg(target_os = "linux")]

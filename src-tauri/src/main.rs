@@ -36,7 +36,11 @@ async fn player_cmd(
 }
 
 #[tauri::command]
-async fn pear_start() -> Result<pear::PearStatus, String> {
+async fn pear_start(m: State<'_, Player>) -> Result<pear::PearStatus, String> {
+    // music is already playing elsewhere: leave Pear closed until the user asks for it (Home)
+    if !spotify::active() && m.external_active().await {
+        return Ok(pear::PearStatus { running: false, message: None });
+    }
     if spotify::active() {
         return tauri::async_runtime::spawn_blocking(spotify::start).await.map_err(|e| e.to_string());
     }

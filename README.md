@@ -120,7 +120,7 @@ How it differs from Linux:
 - Drag the skin body to move the window. Buttons, sliders and the visualizer behave as the skin defines.
 - **Right-click** the skin for the menu: choose a skin, toggle always-on-top, go Home (YouTube Music), or quit.
 - The home panel has the skin chooser (the last choice is remembered). With no skins, it explains where to put them.
-- Linux: check that the player is visible to MPRIS: bus names containing `youtube` or `pear` are used (`spotify` with `RETRO_SOURCE=spotify`). Set `RETRO_MPRIS_ANY=1` to fall back to any other MPRIS player (e.g. YouTube Music in a browser) instead. Set `RETRO_MPRIS_PLAYER=<substring>` if yours is named differently.
+- Linux: check that the player is visible to MPRIS: bus names containing `youtube` or `pear` are used (`spotify` with `RETRO_SOURCE=spotify`). If another MPRIS player (e.g. a browser tab) is playing while Pear is idle, the app follows the one that is playing. Set `RETRO_MPRIS_ANY=1` to also fall back to an idle non-Pear player when Pear is absent. Set `RETRO_MPRIS_PLAYER=<substring>` if yours is named differently.
 
 ### Hyprland and KDE Plasma (Wayland)
 
