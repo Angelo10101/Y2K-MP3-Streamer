@@ -2,7 +2,7 @@
 // Supported subset: view/subview, buttonelement/button/buttongroup (mappingImage hit-testing),
 // slider/customslider, text, effects (cava bars), playlist. Everything else is created as
 // an inert placeholder so scripts that reference it by id keep working.
-import { queueGet, queueSelect, type QueueItem } from "../backend";
+import { queueGet, queueSelect, sourceName, type QueueItem } from "../backend";
 import { ImageStore, parseColor, type RGB } from "./images";
 import type { PlayerShim } from "./player";
 import { ci, fmtTime } from "./player";
@@ -26,8 +26,7 @@ const truthy = (v: unknown, d = true) => (v === undefined || v === "" ? d : !/^(
 const colorOk = (c: string | undefined) => !!c && !/^\s*(none|transparent)\s*$/i.test(c);
 /** WMP's own "return to full mode" button doubles as our Home button. */
 const isHomeButton = (el: { attrs: Record<string, string> }) => /returnToMediaCenter/i.test(el.attrs.onclick ?? "");
-const HOME_TIP = "Home (YouTube Music)";
-const tipOf = (el: { attrs: Record<string, string> }) => (isHomeButton(el) ? HOME_TIP : el.attrs.uptooltip ?? "");
+const tipOf = (el: { attrs: Record<string, string> }) => (isHomeButton(el) ? `Home (${sourceName})` : el.attrs.uptooltip ?? "");
 
 /** Default behaviour of WMP's special button elements (they have no onclick). */
 const BUILTIN: Record<string, string> = {
@@ -841,7 +840,7 @@ export class SkinWindow {
       } else if (s.title) {
         mk(`1. ${s.title}${s.artist ? " - " + s.artist : ""}`, fmtTime(s.length_s), true);
       } else {
-        mk(s.running ? "Nothing playing" : "YouTube Music is not running", "", false).style.opacity = ".6";
+        mk(s.running ? "Nothing playing" : `${sourceName} is not running`, "", false).style.opacity = ".6";
       }
     };
     const refresh = async () => {

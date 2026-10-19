@@ -59,4 +59,11 @@ export const pearStart = () => invoke<PearStatus>("pear_start");
 export const pearHide = () => invoke<void>("pear_hide");
 export const pearShow = () => invoke<void>("pear_show");
 
-export const startupOptions = () => invoke<{ skin: string | null; debug: boolean }>("startup_options");
+/** Name of the playback source in UI text; set from the backend once at startup. */
+export let sourceName = "YouTube Music";
+
+export async function startupOptions() {
+  const o = await invoke<{ skin: string | null; debug: boolean; source: string }>("startup_options");
+  sourceName = o.source;
+  return o;
+}

@@ -1,8 +1,8 @@
 # retro-mp3-yt-music
-Y2K themed front-end for YouTube Music on Linux and Windows
+Y2K themed front-end for YouTube Music (Linux, Windows) and Spotify (Linux, Windows)
 
 Has swappable retro skins and real audio visualizer.
-Controls playback (MPRIS on Linux, Pear's local API on Windows) and renders in custom retro skins with
+Controls playback (MPRIS on Linux, Pear's local API on Windows; Spotify over MPRIS on Linux and the Windows media session on Windows) and renders in custom retro skins with
 audio-driven visualisers (cava on Linux, WASAPI loopback on Windows).
 
 Inspired by a reel: https://www.instagram.com/p/Delqq-ngEdE/
@@ -44,6 +44,25 @@ YouTube Music desktop app  --MPRIS (Linux) / local HTTP API (Windows)-->  Tauri 
    npm run tauri build      # release binary in src-tauri/target/release
    ```
    If YouTube Music isn't running the app tells you so and keeps retrying.
+
+## Using Spotify instead (Linux, Windows)
+
+> **Status:** written against the MPRIS spec and the Windows media-session API, but not yet run against a real Spotify client. Please report rough edges.
+
+On Linux, Spotify's desktop client (and spotifyd / ncspot) already speak MPRIS, so the same backend drives it. On Windows the app talks to Spotify through the system media session (SMTC), the same thing behind the volume flyout. Set `RETRO_SOURCE=spotify`:
+
+```sh
+yay -S spotify                  # or: flatpak install flathub com.spotify.Client
+RETRO_SOURCE=spotify npm run tauri dev
+```
+
+- On launch the app starts Spotify if it isn't running (`RETRO_SPOTIFY_CMD` overrides the command, e.g. `RETRO_SPOTIFY_CMD="flatpak run com.spotify.Client"`). Log in once in Spotify's window.
+- Bus names containing `spotify` are used (this covers the Flatpak and spotifyd). For anything else, e.g. ncspot, set `RETRO_MPRIS_PLAYER=ncspot`.
+- **Home** raises Spotify's window (MPRIS `Raise`). The app does not hide Spotify's window when the player opens (closing it could quit Spotify), so both stay visible.
+- No config is touched: unlike Pear, Spotify needs no plugins or settings changes.
+- Differences from YouTube Music: the playlist drawer shows only the current track (Spotify exposes no queue over MPRIS), and seeking, volume, shuffle and repeat work only as far as your Spotify version implements them over MPRIS. The visualizer (cava) is unchanged since it listens to PipeWire.
+- **Windows:** install the Spotify desktop app (installer or Microsoft Store), then in PowerShell `$env:RETRO_SOURCE = "spotify"; npm run tauri dev`. The app starts Spotify from `%APPDATA%\Spotify\Spotify.exe`, or via the `spotify:` link for the Store version (`RETRO_SPOTIFY_CMD` can point at an `.exe`). Windows differences: **volume can't be controlled** (the media session has none; use Spotify or the system volume), the position is advanced locally between Spotify's updates, the album art is read from the session, and **Home** launches Spotify again, which focuses its window. The visualizer captures all system audio, as with Pear.
+- To make it permanent put `RETRO_SOURCE=spotify` in your launcher or compositor config, e.g. `exec-once = env RETRO_SOURCE=spotify /path/to/retro-mp3-yt-music` in Hyprland.
 
 ## Install (Windows 10/11)
 
@@ -89,7 +108,32 @@ How it differs from Linux:
 - Drag the skin body to move the window. Buttons, sliders and the visualizer behave as the skin defines.
 - **Right-click** the skin for the menu: choose a skin, toggle always-on-top, go Home (YouTube Music), or quit.
 - The home panel has the skin chooser (the last choice is remembered). With no skins, it explains where to put them.
-- Linux: check that the player is visible to MPRIS: bus names containing `youtube` or `pear` are used. Set `RETRO_MPRIS_ANY=1` to fall back to any other MPRIS player (e.g. YouTube Music in a browser) instead. Set `RETRO_MPRIS_PLAYER=<substring>` if yours is named differently.
+- Linux: check that the player is visible to MPRIS: bus names containing `youtube` or `pear` are used (`spotify` with `RETRO_SOURCE=spotify`). Set `RETRO_MPRIS_ANY=1` to fall back to any other MPRIS player (e.g. YouTube Music in a browser) instead. Set `RETRO_MPRIS_PLAYER=<substring>` if yours is named differently.
+
+### Hyprland and KDE Plasma (Wayland)
+
+> **Status:** the code paths are the same as on X11 and the window setup is standard GTK, but this has not been run on Hyprland or Plasma yet. Treat the rules below as a starting point.
+
+The app is a frameless, transparent, fixed 900x600 window. On a Wayland compositor you tell it how to treat that window with window rules; the Wayland app id is normally `retro-mp3-yt-music` (check yours with `hyprctl clients`).
+
+**Hyprland** (`hyprland.conf`; Hyprland 0.53+ syntax, older versions use `windowrulev2 = float, class:^(retro-mp3-yt-music)$` and so on):
+```ini
+windowrule = float on,      match:class ^(retro-mp3-yt-music)$
+windowrule = no_shadow on,  match:class ^(retro-mp3-yt-music)$
+windowrule = no_blur on,    match:class ^(retro-mp3-yt-music)$
+windowrule = no_anim on,    match:class ^(retro-mp3-yt-music)$
+windowrule = border_size 0, match:class ^(retro-mp3-yt-music)$
+windowrule = pin on,        match:class ^(retro-mp3-yt-music)$   # optional: always on top, on every workspace
+```
+Without these the window is tiled, and Hyprland draws a border, shadow and blur through the transparent parts. Dragging the skin body moves the window as usual.
+
+**KDE Plasma** (Wayland or X11): transparency works out of the box with KWin's compositor. In *System Settings > Window Management > Window Rules* add a rule matching the window class `retro-mp3-yt-music` and force *No titlebar and frame* (if a frame shows), *Keep above* (the app's "Always on top" menu item can't do this on Wayland) and, if you like, *Skip taskbar*.
+
+**Both:**
+- Hiding Pear's window only works on X11 and Windows, so with Pear on Wayland its window and the companion panel both stay visible (Spotify mode never hides its window either).
+- If clicks on the transparent parts of the skin don't fall through, or the window doesn't render right, run through XWayland: `GDK_BACKEND=x11 npm run tauri dev`.
+- If WebKitGTK shows a blank window on NVIDIA, try `WEBKIT_DISABLE_DMABUF_RENDERER=1`.
+- `cava` reads PipeWire, so the visualizer works the same on Wayland. Install `cava` for it.
 
 ### Tiling window managers (i3, sway)
 The window sets a utility type hint so i3 floats it automatically. If yours still tiles it, add `for_window [class="Retro-mp3-yt-music"] floating enable` to your i3 config. The window has no titlebar; drag the skin body to move it.
@@ -153,7 +197,7 @@ Skins that use several WMP views (EQ, playlist, visualization, video, info windo
 - **Visualizer presets** are our own (bars, mirror, scope, dots), not WMP's effect plugins; **video** isn't supported (YouTube Music plays audio).
 - **"Return to full mode"** (WMP's skin-to-full-player button) is the "Home" action: it shows the YouTube Music app's own window (MPRIS `Raise` on Linux, window focus on Windows).
 - **EQ, balance, playback rate:** rendered and animated but they do nothing, since neither MPRIS nor Pear's API has an equivalent.
-- **Playlist:** the queue comes from Pear's local API server (`127.0.0.1:26538`, no auth, localhost only). If it is unreachable the drawer falls back to the current track.
+- **Playlist:** the queue comes from Pear's local API server (`127.0.0.1:26538`, no auth, localhost only). If it is unreachable, or with Spotify, the drawer falls back to the current track.
 - **Skin scripts are untrusted code.** They run in a restricted scope (only a small allow-list of JS globals plus `player`, `view`, `theme` and the skin's elements), but this is best effort, not a security boundary. Only install skins you trust.
 - Skin-script compatibility is validated against the skins listed above; other skins may use attributes or script features not yet implemented. Unsupported elements are logged to the dev console (`[skin] <tag> not supported`).
 - Seeking uses MPRIS `SetPosition` (falling back to relative `Seek`) on Linux and the API's `seek-to` on Windows.
@@ -164,7 +208,7 @@ Open a skin straight into the player with `RETRO_SKIN=Goo npm run tauri dev` (an
 
 To exercise the Windows (API) control path on Linux: `RETRO_PLAYER_BACKEND=api npm run tauri dev`.
 
-No YouTube Music app handy? `python3 scripts/fake_mpris.py` registers a fake player on D-Bus (needs `python-dbus` and `python-gobject`).
+No YouTube Music app handy? `python3 scripts/fake_mpris.py` registers a fake player on D-Bus (needs `python-dbus` and `python-gobject`). To try the Spotify code path with it: `RETRO_SOURCE=spotify RETRO_MPRIS_PLAYER=youtube_music_fake npm run tauri dev`.
 
 ```sh
 npm test                    # unit tests (WMS parser, GIF decoder)

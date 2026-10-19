@@ -1,7 +1,7 @@
 // App flow: "home" = Pear's own YouTube Music window plus a small companion panel (skin
 // chooser, mini controls); "player" = the skinned player with Pear's window hidden.
 // Only one of the two is ever visible.
-import { emptyState, inTauri, listSkins, onPlayerState, onViz, pearHide, pearShow, pearStart, readSkin, setInputShape, startupOptions, type PlayerState } from "./backend";
+import { emptyState, inTauri, listSkins, onPlayerState, onViz, pearHide, pearShow, pearStart, readSkin, setInputShape, sourceName, startupOptions, type PlayerState } from "./backend";
 import { Panel } from "./panel";
 import { PlayerShim } from "./wmp/player";
 import { SkinWindow, type WindowHooks } from "./wmp/render";
@@ -168,7 +168,7 @@ async function openMenu(x: number, y: number) {
   for (const n of list.skins) item(`${n === cur ? "✓ " : "   "}${n.replace(/\.wmz$/i, "")}`, () => void openSkin(n));
   if (!list.skins.length) item(`no skins in ${list.dir}`, () => {});
   item(`${onTop ? "✓ " : "   "}Always on top`, () => { onTop = !onTop; void hooks.setAlwaysOnTop(onTop); }, true);
-  item("   Home (YouTube Music)", () => void enterHome());
+  item(`   Home (${sourceName})`, () => void enterHome());
   item("   Quit", () => void hooks.close());
   document.body.appendChild(m);
   const r = m.getBoundingClientRect();
@@ -193,14 +193,14 @@ document.addEventListener("contextmenu", (e) => {
 // ---------- startup ----------
 (async () => {
   onState(emptyState);
+  const opts = inTauri ? await startupOptions() : undefined; // also sets the source name used in UI text
   if (inTauri) {
     const status = await pearStart().catch((e) => ({ running: false, message: String(e) }));
     pearMessage = status.message ?? undefined;
   }
   await showHome();
   // development aid: RETRO_SKIN=<name> opens that skin's player immediately
-  if (inTauri) {
-    const opts = await startupOptions();
+  if (inTauri && opts) {
     if (opts.debug) {
       document.addEventListener("pointerdown", (e) => {
         const stack = document.elementsFromPoint(e.clientX, e.clientY).slice(0, 8).map((n) => {

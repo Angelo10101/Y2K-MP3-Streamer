@@ -1,4 +1,4 @@
-//! MPRIS (D-Bus) client for the YouTube Music desktop app.
+//! MPRIS (D-Bus) client for the YouTube Music desktop app (or Spotify, see `spotify.rs`).
 
 use std::collections::HashMap;
 
@@ -26,6 +26,8 @@ impl Mpris {
         // The app was renamed from "YouTube Music" to "Pear Desktop"; accept either.
         let wanted: Vec<String> = match std::env::var("RETRO_MPRIS_PLAYER") {
             Ok(w) => vec![w.to_lowercase()],
+            // matches spotify, spotifyd and the Flatpak's org.mpris.MediaPlayer2.spotify
+            Err(_) if crate::spotify::active() => vec!["spotify".into()],
             Err(_) => vec!["youtube".into(), "pear".into()],
         };
         let names: Vec<String> = DBusProxy::new(&self.conn)
@@ -116,7 +118,7 @@ impl Mpris {
             .find_player()
             .await
             .map_err(|e| e.to_string())?
-            .ok_or("YouTube Music is not running")?;
+            .ok_or_else(|| format!("{} is not running", crate::spotify::source_name()))?;
         let e = |e: zbus::Error| e.to_string();
         if cmd == "raise" {
             // org.mpris.MediaPlayer2.Raise brings the player's own window to the front

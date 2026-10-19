@@ -7,6 +7,9 @@ mod mpris;
 mod pear;
 mod player;
 mod skins;
+mod spotify;
+#[cfg(windows)]
+mod smtc;
 #[cfg(target_os = "linux")]
 mod x11tweaks;
 #[cfg(windows)]
@@ -34,17 +37,31 @@ async fn player_cmd(
 
 #[tauri::command]
 async fn pear_start() -> Result<pear::PearStatus, String> {
+    if spotify::active() {
+        return tauri::async_runtime::spawn_blocking(spotify::start).await.map_err(|e| e.to_string());
+    }
     tauri::async_runtime::spawn_blocking(pear::start).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn pear_hide() -> Result<(), String> {
+    // Closing Spotify's window may quit it, so with Spotify both windows just stay visible.
+    if spotify::active() {
+        return Ok(());
+    }
     tauri::async_runtime::spawn_blocking(pear::hide_window).await.map_err(|e| e.to_string())?
 }
 
 /// Brings Pear's window back (starting Pear first if it isn't running).
 #[tauri::command]
 async fn pear_show(m: State<'_, Player>) -> Result<(), String> {
+    if spotify::active() {
+        if !spotify::is_running() {
+            tauri::async_runtime::spawn_blocking(spotify::start).await.map_err(|e| e.to_string())?;
+            return Ok(());
+        }
+        return m.command("raise", None, None).await;
+    }
     if !pear::is_running() {
         tauri::async_runtime::spawn_blocking(pear::start).await.map_err(|e| e.to_string())?;
         return Ok(());
@@ -60,11 +77,17 @@ async fn pear_show(m: State<'_, Player>) -> Result<(), String> {
 
 #[tauri::command]
 async fn queue_get() -> Result<Vec<pear::QueueItem>, String> {
+    if spotify::active() {
+        return Err("Spotify has no queue API".into()); // the playlist drawer falls back to the current track
+    }
     tauri::async_runtime::spawn_blocking(pear::queue).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 async fn queue_select(index: usize) -> Result<(), String> {
+    if spotify::active() {
+        return Err("Spotify has no queue API".into());
+    }
     tauri::async_runtime::spawn_blocking(move || pear::select(index)).await.map_err(|e| e.to_string())?
 }
 
@@ -74,11 +97,17 @@ struct StartupOptions {
     skin: Option<String>,
     /// `RETRO_DEBUG=1`: log which skin elements are under every click
     debug: bool,
+    /// Name of the playback source for UI text: "YouTube Music" or "Spotify"
+    source: &'static str,
+}
+
+fn source_name() -> &'static str {
+    spotify::source_name()
 }
 
 #[tauri::command]
 fn startup_options() -> StartupOptions {
-    StartupOptions { skin: std::env::var("RETRO_SKIN").ok().filter(|s| !s.is_empty()), debug: std::env::var_os("RETRO_DEBUG").is_some() }
+    StartupOptions { skin: std::env::var("RETRO_SKIN").ok().filter(|s| !s.is_empty()), debug: std::env::var_os("RETRO_DEBUG").is_some(), source: source_name() }
 }
 
 /// Restricts mouse input to the given `[x, y, w, h]` rectangles (the opaque part

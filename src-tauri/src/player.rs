@@ -35,11 +35,17 @@ pub struct PlayerState {
 pub enum Player {
     #[cfg(target_os = "linux")]
     Mpris(crate::mpris::Mpris),
+    #[cfg(windows)]
+    Smtc(crate::smtc::Smtc),
     Api(PearApi),
 }
 
 impl Player {
     pub async fn connect() -> Self {
+        #[cfg(windows)]
+        if crate::spotify::active() {
+            return Player::Smtc(crate::smtc::Smtc::new());
+        }
         let want = std::env::var("RETRO_PLAYER_BACKEND").unwrap_or_default();
         #[cfg(target_os = "linux")]
         if want != "api" {
@@ -56,6 +62,8 @@ impl Player {
         match self {
             #[cfg(target_os = "linux")]
             Player::Mpris(m) => m.snapshot().await,
+            #[cfg(windows)]
+            Player::Smtc(m) => m.snapshot().await,
             Player::Api(a) => a.snapshot().await,
         }
     }
@@ -64,6 +72,8 @@ impl Player {
         match self {
             #[cfg(target_os = "linux")]
             Player::Mpris(m) => m.command(cmd, num, text).await,
+            #[cfg(windows)]
+            Player::Smtc(m) => m.command(cmd, num, text).await,
             Player::Api(a) => a.command(cmd, num, text).await,
         }
     }

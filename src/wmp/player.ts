@@ -1,6 +1,6 @@
 // A WMP object-model shim (`player.*`) backed by the MPRIS state from the backend.
 // Properties MPRIS cannot support (balance, EQ, rate) are stored locally and do nothing.
-import { emptyState, playerCmd, type PlayerState } from "../backend";
+import { emptyState, playerCmd, sourceName, type PlayerState } from "../backend";
 
 const pad = (n: number) => String(Math.floor(n)).padStart(2, "0");
 export function fmtTime(sec: number): string {
@@ -174,7 +174,7 @@ export class PlayerShim {
       get playState() { return self.playState; },
       get openState() { return self.state.running ? 13 : 0; },
       get status() {
-        if (!self.state.running) return "YouTube Music is not running";
+        if (!self.state.running) return `${sourceName} is not running`;
         return self.state.status === "Playing" ? "Playing" : self.state.status === "Paused" ? "Paused" : "Stopped";
       },
       get URL() { return ""; },

@@ -1,6 +1,6 @@
 // Plain, unskinned control panel: the test UI for MPRIS, and the fallback shown when no
 // skin is loaded (with a message telling the user where to put one).
-import { playerCmd, type PlayerState } from "./backend";
+import { playerCmd, sourceName, type PlayerState } from "./backend";
 import { fmtTime } from "./wmp/player";
 
 export interface PanelInfo {
@@ -28,7 +28,7 @@ export class Panel {
       : `<div class="msg">No skins found. Put a <code>.wmz</code> file (e.g. <code>Headspace.wmz</code>) in <code>${info.skinsDir}</code>.</div>`;
     this.el.innerHTML = `
       <h1 data-tauri-drag-region>retro-mp3-yt-music: home</h1>
-      <div class="row"><button id="yt">Open YouTube Music</button></div>
+      <div class="row"><button id="yt">Open ${sourceName}</button></div>
       ${info.message ? `<div class="msg">${info.message}</div>` : ""}
       <div id="offline" class="msg"></div>
       <div class="row"><img class="art" id="art" alt=""><div><b id="title">-</b><br><span id="artist"></span> <span id="album"></span></div></div>
@@ -67,7 +67,7 @@ export class Panel {
     this.last = s;
     this.$.offline.textContent = s.running
       ? (s.error ?? "")
-      : "YouTube Music isn't running; starting it...";
+      : `${sourceName} isn't running; starting it...`;
     this.$.title.textContent = s.title || "-";
     this.$.artist.textContent = s.artist;
     this.$.album.textContent = s.album ? `· ${s.album}` : "";

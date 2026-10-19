@@ -20,5 +20,6 @@ x11rb = "0.13"
 zbus = "5"
 
 [target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Foundation", "Media_Control", "Media", "Storage_Streams"] }
 cpal = "0.15"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }
