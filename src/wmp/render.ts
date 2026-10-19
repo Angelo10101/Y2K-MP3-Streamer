@@ -607,7 +607,9 @@ export class SkinWindow {
     const c = document.createElement("canvas");
     c.width = w; c.height = h;
     el.canvas = c; el.dom.appendChild(c);
-    const frames = Math.max(1, Math.round(film.width / w));
+    // frames sit side by side, or stacked when the strip is taller than it is wide (Disney's volume.png)
+    const stacked = Math.round(film.height / h) > 1 && Math.round(film.width / w) <= 1;
+    const frames = Math.max(1, Math.round(stacked ? film.height / h : film.width / w));
     const mapData = map.getContext("2d", { willReadFrequently: true })!.getImageData(0, 0, w, h).data;
     const frac = () => {
       const min = this.n(el, "min", 0), max = this.n(el, "max", 100), v = this.n(el, "value", min);
@@ -616,7 +618,8 @@ export class SkinWindow {
     el.paint = () => {
       const ctx = c.getContext("2d")!;
       ctx.clearRect(0, 0, w, h);
-      ctx.drawImage(film, Math.round(frac() * (frames - 1)) * w, 0, w, h, 0, 0, w, h);
+      const f = Math.round(frac() * (frames - 1));
+      ctx.drawImage(film, stacked ? 0 : f * w, stacked ? f * h : 0, w, h, 0, 0, w, h);
     };
     el.paint();
     /** The slider value under a point, or null outside the mapped area. */
