@@ -10,11 +10,9 @@ import { loadSkin, pickMainView } from "./wmp/skin";
 type Mode = "home" | "player";
 const app = document.getElementById("app")!;
 const player = new PlayerShim();
-const startedAt = Date.now();
 let mode: Mode = "home";
 let panel: Panel | undefined;
 let current: SkinWindow | undefined;
-let prev: PlayerState = emptyState;
 let pearMessage: string | undefined;
 let onTop = false;
 
@@ -58,24 +56,12 @@ const hooks: WindowHooks = {
 function onState(s: PlayerState) {
   player.update(s);
   panel?.update(s);
-  if (mode === "home") maybeEnterPlayer(prev, s);
-  prev = s;
 }
 onPlayerState(onState);
 onViz(
   (b) => { player.bars = b; panel?.bars(b); },
   (ok, reason) => { player.vizAvailable = ok; player.vizReason = reason; if (!ok) console.info("[viz]", reason); },
 );
-
-/** A new track started playing while on the home screen: go to the player. */
-function maybeEnterPlayer(before: PlayerState, s: PlayerState) {
-  if (!s.running || s.status !== "Playing" || !s.track_id) return;
-  if (Date.now() - startedAt < 5000) return; // ignore whatever was already playing at launch
-  if (s.track_id === before.track_id) return; // resume / same track
-  const autoAdvanced = before.status === "Playing" && before.length_s > 0 && before.position_s >= before.length_s - 3;
-  if (autoAdvanced) return; // the previous song just ended; don't yank the user off the home screen
-  void enterPlayer();
-}
 
 // ---------- modes ----------
 const savedSkin = () => localStorage.getItem("skin");

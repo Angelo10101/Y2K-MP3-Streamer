@@ -109,7 +109,7 @@ How it differs from Linux:
 
 ### How it works day to day
 - **Home:** Pear's own YouTube Music window (everything: home, library, playlists, search) plus a small companion panel with the skin chooser, mini controls and an *Open YouTube Music* button.
-- **Start any song in Pear:** the home screen is hidden and the skinned player opens. Resuming the same song or a song auto-advancing doesn't switch.
+- **Open the player:** press *Open player* on the companion panel. The player never opens by itself: starting, skipping or auto-advancing songs leaves the home screen as it is.
 - **In the player:** the *playlist* drawer shows Pear's real queue (double-click to play a row). The *return to full mode* button (or right-click > Home) hides the player and brings the home screen back. Only one of the two is ever visible.
 - Hiding Pear's window works on **X11** and **Windows** (we close it politely and Pear hides to its tray). On Wayland the window can't be hidden, so both stay visible.
 - Under i3 add `for_window [class="com.github.th-ch.youtube-music"] floating enable` if you'd rather not have Pear tile.
