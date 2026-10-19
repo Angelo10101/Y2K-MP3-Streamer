@@ -58,6 +58,28 @@ export function parseRegion(text: string): [number, number][][] {
   return polys;
 }
 
+export interface PlaylistStyle {
+  normal: string;
+  current: string;
+  normalBg: string;
+  selectedBg: string;
+  font: string;
+}
+
+/** pledit.txt: the playlist window's colours and font (`Normal=#00FF00` style lines). */
+export function parsePledit(text: string): PlaylistStyle {
+  const style: PlaylistStyle = { normal: "#00FF00", current: "#FFFFFF", normalBg: "#000000", selectedBg: "#0000FF", font: "Arial" };
+  const keys: Record<string, keyof PlaylistStyle> = { normal: "normal", current: "current", normalbg: "normalBg", selectedbg: "selectedBg", font: "font" };
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^\s*(\w+)\s*=\s*(.+?)\s*$/.exec(line);
+    const key = m && keys[m[1].toLowerCase()];
+    if (!m || !key) continue;
+    if (key === "font") style.font = m[2].replace(/["']/g, "");
+    else style[key] = /^#?[0-9a-f]{6}$/i.test(m[2]) ? (m[2].startsWith("#") ? m[2] : `#${m[2]}`) : style[key];
+  }
+  return style;
+}
+
 /** The four digits of the time display: minutes (capped at 99) and seconds. */
 export function timeDigits(sec: number): [number, number, number, number] {
   const s = Math.max(0, Math.floor(sec || 0));

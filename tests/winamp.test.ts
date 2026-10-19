@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { zipSync } from "fflate";
-import { glyph, loadWinampSkin, parseRegion, parseViscolor, timeDigits, volumeFrame } from "../src/winamp/skin";
+import { glyph, loadWinampSkin, parsePledit, parseRegion, parseViscolor, timeDigits, volumeFrame } from "../src/winamp/skin";
 
 const bytes = (s: string) => new TextEncoder().encode(s);
 
@@ -35,6 +35,17 @@ describe("winamp text files", () => {
 
   it("treats a comment-only region.txt as a plain rectangle", () => {
     expect(parseRegion("// This file was created by a tool\n// http://example.com")).toEqual([]);
+  });
+});
+
+describe("winamp playlist style", () => {
+  it("reads pledit.txt colours and font", () => {
+    const s = parsePledit("[Text]\r\nNormal=#00FF00\r\nCurrent=FFFFFF\r\nNormalBG=#000000\r\nSelectedBG=#0000ff\r\nFont=\"Tahoma\"\r\n");
+    expect(s).toEqual({ normal: "#00FF00", current: "#FFFFFF", normalBg: "#000000", selectedBg: "#0000ff", font: "Tahoma" });
+  });
+
+  it("falls back to Winamp's defaults", () => {
+    expect(parsePledit("Normal=nonsense")).toEqual({ normal: "#00FF00", current: "#FFFFFF", normalBg: "#000000", selectedBg: "#0000FF", font: "Arial" });
   });
 });
 
