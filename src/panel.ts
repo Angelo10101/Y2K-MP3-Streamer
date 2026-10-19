@@ -24,8 +24,8 @@ export class Panel {
   constructor(private info: PanelInfo) {
     this.el.className = "panel";
     const skins = info.skins.length
-      ? `<div class="row">Skin: <select id="skin">${info.skins.map((s) => `<option${s === info.selected ? " selected" : ""}>${s.replace(/\.wmz$/i, "")}</option>`).join("")}</select><button id="player">Open player</button></div>`
-      : `<div class="msg">No skins found. Put a <code>.wmz</code> file (e.g. <code>Headspace.wmz</code>) in <code>${info.skinsDir}</code>.</div>`;
+      ? `<div class="row">Skin: <select id="skin">${info.skins.map((s) => `<option value="${s}"${s === info.selected ? " selected" : ""}>${s.replace(/\.w[ms]z$/i, "")}</option>`).join("")}</select><button id="player">Open player</button></div>`
+      : `<div class="msg">No skins found. Put a <code>.wmz</code> (Windows Media Player) or <code>.wsz</code> (Winamp) file, e.g. <code>Headspace.wmz</code>, in <code>${info.skinsDir}</code>.</div>`;
     this.el.innerHTML = `
       <h1 data-tauri-drag-region>Y2K-MP3-Streamer: home</h1>
       <div class="row"><button id="yt">Open ${sourceName}</button></div>
@@ -48,7 +48,7 @@ export class Panel {
     on("rep", () => playerCmd("loop", undefined, this.last?.loop_status === "None" ? "Playlist" : "None"));
     on("yt", () => info.onOpenYouTube());
     on("player", () => info.onOpenPlayer());
-    this.$.skin?.addEventListener("change", () => info.onPick((this.$.skin as HTMLSelectElement).value + ".wmz"));
+    this.$.skin?.addEventListener("change", () => info.onPick((this.$.skin as HTMLSelectElement).value));
     const seek = this.$.seek as HTMLInputElement;
     seek.addEventListener("pointerdown", () => (this.seeking = true));
     seek.addEventListener("change", () => { this.seeking = false; void playerCmd("seek_to", Number(seek.value)); });

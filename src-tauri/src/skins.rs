@@ -1,4 +1,4 @@
-//! Locating and reading `.wmz` skin archives.
+//! Locating and reading `.wmz` and `.wsz` skin archives.
 
 use std::path::PathBuf;
 
@@ -49,17 +49,23 @@ pub fn list_skins() -> SkinList {
         .flatten()
         .flatten()
         .filter_map(|e| e.file_name().into_string().ok())
-        .filter(|n| n.to_lowercase().ends_with(".wmz"))
+        .filter(|n| is_skin(n))
         .collect();
     skins.sort_by_key(|s| s.to_lowercase());
     let dir = std::fs::canonicalize(&dir).unwrap_or(dir);
     SkinList { dir: dir.display().to_string(), skins }
 }
 
-/// Raw bytes of a skin archive. Only plain `*.wmz` file names are accepted.
+/// Windows Media Player (`.wmz`) and Winamp (`.wsz`) skins.
+fn is_skin(name: &str) -> bool {
+    let n = name.to_lowercase();
+    n.ends_with(".wmz") || n.ends_with(".wsz")
+}
+
+/// Raw bytes of a skin archive. Only plain `*.wmz` / `*.wsz` file names are accepted.
 #[tauri::command]
 pub fn read_skin(name: String) -> Result<tauri::ipc::Response, String> {
-    if name.contains(['/', '\\']) || name.starts_with('.') || !name.to_lowercase().ends_with(".wmz") {
+    if name.contains(['/', '\\']) || name.starts_with('.') || !is_skin(&name) {
         return Err("invalid skin name".into());
     }
     std::fs::read(skins_dir().join(&name))

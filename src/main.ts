@@ -6,13 +6,15 @@ import { Panel } from "./panel";
 import { PlayerShim } from "./wmp/player";
 import { SkinWindow, type WindowHooks } from "./wmp/render";
 import { loadSkin, pickMainView } from "./wmp/skin";
+import { loadWinampSkin } from "./winamp/skin";
+import { WinampWindow } from "./winamp/window";
 
 type Mode = "home" | "player";
 const app = document.getElementById("app")!;
 const player = new PlayerShim();
 let mode: Mode = "home";
 let panel: Panel | undefined;
-let current: SkinWindow | undefined;
+let current: { mount(): Promise<void>; dispose(): void; scheduleShape(ms?: number): void } | undefined;
 let pearMessage: string | undefined;
 let onTop = false;
 
@@ -116,14 +118,19 @@ async function showHome(message?: string) {
 /** Returns false if the skin failed to load (the home screen is shown instead). */
 async function openSkin(name: string): Promise<boolean> {
   try {
-    const skin = loadSkin(name, await readSkin(name));
+    const bytes = await readSkin(name);
     closeMenu();
     current?.dispose();
     panel = undefined;
-    current = new SkinWindow(skin, pickMainView(skin.views), player, app, hooks);
+    if (/\.wsz$/i.test(name)) {
+      current = new WinampWindow(loadWinampSkin(name, bytes), player, app, hooks);
+    } else {
+      const skin = loadSkin(name, bytes);
+      current = new SkinWindow(skin, pickMainView(skin.views), player, app, hooks);
+    }
     await current.mount();
     localStorage.setItem("skin", name);
-    (window as unknown as { __skins: unknown }).__skins = { skin, current };
+    (window as unknown as { __skins: unknown }).__skins = { current };
     nudgeRepaint();
     return true;
   } catch (e) {
@@ -151,7 +158,7 @@ async function openMenu(x: number, y: number) {
     d.onclick = () => { closeMenu(); f(); };
     m.appendChild(d);
   };
-  for (const n of list.skins) item(`${n === cur ? "✓ " : "   "}${n.replace(/\.wmz$/i, "")}`, () => void openSkin(n));
+  for (const n of list.skins) item(`${n === cur ? "✓ " : "   "}${n.replace(/\.w[ms]z$/i, "")}`, () => void openSkin(n));
   if (!list.skins.length) item(`no skins in ${list.dir}`, () => {});
   item(`${onTop ? "✓ " : "   "}Always on top`, () => { onTop = !onTop; void hooks.setAlwaysOnTop(onTop); }, true);
   item(`   Home (${sourceName})`, () => void enterHome());
@@ -208,8 +215,8 @@ document.addEventListener("contextmenu", (e) => {
         }
       }, true);
     }
-    const want = opts.skin?.toLowerCase().replace(/\.wmz$/, "");
-    const found = want && (await listSkins()).skins.find((n) => n.toLowerCase().replace(/\.wmz$/, "") === want);
+    const want = opts.skin?.toLowerCase().replace(/\.w[ms]z$/, "");
+    const found = want && (await listSkins()).skins.find((n) => n.toLowerCase().replace(/\.w[ms]z$/, "") === want);
     if (found) { localStorage.setItem("skin", found); await enterPlayer(); return; }
   }
   // Pear may have been left hidden by a previous run (player mode); bring it back. Right

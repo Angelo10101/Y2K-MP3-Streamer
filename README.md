@@ -30,7 +30,7 @@ YouTube Music desktop app  --MPRIS (Linux) / local HTTP API (Windows)-->  Tauri 
 
 - **Playback engine:** th-ch's YouTube Music desktop app (now called [Pear Desktop](https://github.com/pear-devs/pear-desktop)) runs in the background. This app never talks to YouTube.
 - **Control:** play/pause/stop/next/previous, seek, volume, shuffle/repeat and track metadata over MPRIS on Linux, or through Pear's local API server on Windows (`RETRO_PLAYER_BACKEND=api` forces the API backend anywhere, `mpris` forces MPRIS).
-- **Skins:** real Windows Media Player `.wmz` skins are unzipped, their `.wms` layout is parsed and rendered, and the skin's own JScript runs against a `player.*` shim that maps onto MPRIS.
+- **Skins:** real Windows Media Player `.wmz` skins are unzipped, their `.wms` layout is parsed and rendered, and the skin's own JScript runs against a `player.*` shim that maps onto MPRIS. Winamp classic `.wsz` skins are drawn from their sprite sheets (see [Winamp skins](#winamp-classic-skins-wsz)).
 - **Visualizer:** on Linux [cava](https://github.com/karlstav/cava) reads PipeWire; on Windows the app captures the default output device (WASAPI loopback) and runs an FFT. Either way bar data streams to the skin's effects area.
 
 ## Install (Arch / EndeavourOS)
@@ -46,7 +46,7 @@ YouTube Music desktop app  --MPRIS (Linux) / local HTTP API (Windows)-->  Tauri 
    git clone https://github.com/Angelo10101/Y2K-MP3-Streamer.git && cd Y2K-MP3-Streamer
    npm install
    ```
-3. **Add a skin.** Skins are copyrighted and are *not* in this repo (`skins/` is gitignored). Put `.wmz` files in `skins/`, e.g. `skins/Headspace.wmz`. Old WMP skins are collected at the [Internet Archive](https://archive.org/details/windowsmediaplayerskinscollection).
+3. **Add a skin.** Skins are copyrighted and are *not* in this repo (`skins/` is gitignored). Put `.wmz` (Windows Media Player) or `.wsz` (Winamp) files in `skins/`, e.g. `skins/Headspace.wmz`. Old WMP skins are collected at the [Internet Archive](https://archive.org/details/windowsmediaplayerskinscollection), and Winamp skins at the [Winamp Skin Museum](https://skins.webamp.org/).
    - Skins are searched for in `$RETRO_SKINS_DIR`, `./skins`, next to the executable, then `~/.local/share/y2k-mp3-streamer/skins` (the old `~/.local/share/retro-mp3-yt-music/skins` from before the rename still works).
    - To try the app without a real skin: `python3 scripts/make_test_skin.py` generates a small original `skins/TestSkin.wmz`.
 4. Nothing else to do for the player: on first launch this app starts Pear itself and, if needed, edits Pear's config (`~/.config/YouTube Music/config.json`, a backup is saved as `config.json.bak-retro-mp3`) to enable the MPRIS and API-server plugins, hide-to-tray on close, and no auto-resume. Log in to your Google account once in Pear's window.
@@ -93,7 +93,7 @@ RETRO_SOURCE=spotify npm run tauri dev
    cd Y2K-MP3-Streamer
    npm install
    ```
-4. **Add skins** to the `skins\` folder in the project (or to `%APPDATA%\y2k-mp3-streamer\skins`; the old `%APPDATA%\retro-mp3-yt-music\skins` still works). They are not in the repo; get `.wmz` files from the [Internet Archive collection](https://archive.org/details/windowsmediaplayerskinscollection), or run `python scripts/make_test_skin.py` for a small generated one.
+4. **Add skins** to the `skins\` folder in the project (or to `%APPDATA%\y2k-mp3-streamer\skins`; the old `%APPDATA%\retro-mp3-yt-music\skins` still works). They are not in the repo; get `.wmz` files from the [Internet Archive collection](https://archive.org/details/windowsmediaplayerskinscollection) or `.wsz` Winamp skins from the [Skin Museum](https://skins.webamp.org/), or run `python scripts/make_test_skin.py` for a small generated one.
 5. **Run it**
    ```powershell
    npm run tauri dev       # development
@@ -184,8 +184,26 @@ Implemented subset of the WMP skin object model:
 
 `player.*` shim: `controls.*`, `currentMedia.*` (`name`, `duration`, `getItemInfo`), `settings.volume/mute/getMode/setMode`, `playState`, `status`, `currentPlaylist` (one item). Player events `onplaystatechange` / `onmediachange` / `onopenstatechange` are dispatched to elements that declare them and to same-named global script functions.
 
+### Winamp classic skins (.wsz)
+
+Winamp 2 skins are a different format from WMP skins: a ZIP of bitmaps (`main.bmp`, `cbuttons.bmp`, `numbers.bmp`, `text.bmp`, ...) with no scripting. This app draws the classic **main window** (the fixed 275x116 layout) from those bitmaps at 2x size, nearest-neighbour scaled:
+
+| Feature | Status |
+| --- | --- |
+| Background, title bar, and the skin's own digit and text fonts (`numbers.bmp` / `nums_ex.bmp`, `text.bmp`) | yes |
+| Prev / play / pause / stop / next, shuffle and repeat (lit when on), the play-state indicator | yes |
+| Elapsed time, and the scrolling song title | yes |
+| Volume slider (28-frame background, draggable thumb) and seek bar (drag to seek) | yes |
+| Spectrum analyzer in the skin's own colours (`viscolor.txt`, cava on Linux) | yes |
+| Window shape from `region.txt` | implemented and unit-tested, but none of the tested skins use one |
+| **Eject** button | acts as **Home** (Winamp's eject opens a file dialog, which this app doesn't have) |
+| Balance slider and the EQ / PL toggle buttons | drawn, but they do nothing |
+| Equalizer and playlist windows, windowshade mode, the cursors in the archive | no |
+
+Skins in a wrapping folder inside the archive work too (the folder holding `main.bmp` is used).
+
 ## Tested skins
-All of these load, render like their own preview image, and have a working Home button (checked with real clicks):
+All of these load, render like their own preview image, and have a working Home button (checked with real clicks; Winamp skins use the eject button for Home):
 
 | Skin | Notes |
 | --- | --- |
@@ -197,6 +215,9 @@ All of these load, render like their own preview image, and have a working Home 
 | Back to the Future Trilogy | animated GIF intro, then the dashboard |
 | Alienware Invader | WMP 11 skin; always plays its 568-frame shutter intro when opened (at double speed, ~14 s), **double-click the skin to skip it** |
 | Tube Frame | full: transport, shuffle/mute, volume and balance drawer, playlist drawer, status line cycling title/album/artist |
+| KTI Kayo Kayo Goo (Winamp) | transport, shuffle/repeat, volume, seek, time and title all work |
+| Mazda RX-7 Blue (Winamp) | same; its volume wedge and seek thumb follow the player |
+| Fallout Pip-Boy 3000 Green v4 (Winamp) | same; the archive wraps its files in a folder |
 | TestSkin | generated by `scripts/make_test_skin.py` |
 
 Every skin's own "return to full mode" control (`view.returnToMediaCenter()`) is the **Home** button (tooltip "Home (YouTube Music)"). **Esc** goes Home from the player on any skin.
@@ -210,6 +231,7 @@ Skins that use several WMP views (EQ, playlist, visualization, video, info windo
 - **Visualizer presets** are our own (bars, mirror, scope, dots), not WMP's effect plugins; **video** isn't supported (YouTube Music plays audio).
 - **"Return to full mode"** (WMP's skin-to-full-player button) is the "Home" action: it shows the YouTube Music app's own window (MPRIS `Raise` on Linux, window focus on Windows).
 - **EQ, balance, playback rate:** rendered and animated but they do nothing, since neither MPRIS nor Pear's API has an equivalent.
+- **Winamp skins** show only the main window; the equalizer and playlist windows, windowshade mode and modern (`.wal`) skins aren't supported. Only the three skins in the table above were tested, so other skins may expose layout quirks.
 - **Playlist:** the queue comes from Pear's local API server (`127.0.0.1:26538`, no auth, localhost only). If it is unreachable, or with Spotify, the drawer falls back to the current track.
 - **Skin scripts are untrusted code.** They run in a restricted scope (only a small allow-list of JS globals plus `player`, `view`, `theme` and the skin's elements), but this is best effort, not a security boundary. Only install skins you trust.
 - Skin-script compatibility is validated against the skins listed above; other skins may use attributes or script features not yet implemented. Unsupported elements are logged to the dev console (`[skin] <tag> not supported`).
