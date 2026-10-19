@@ -264,7 +264,7 @@ pub fn show_window() -> Result<(), String> {
     spawn() // a second launch makes Electron's single-instance handler show the window
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct QueueItem {
     pub index: usize,
     pub video_id: String,
