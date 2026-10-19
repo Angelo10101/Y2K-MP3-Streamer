@@ -70,7 +70,15 @@ impl Player {
     pub async fn snapshot(&self) -> PlayerState {
         match self {
             #[cfg(target_os = "linux")]
-            Player::Mpris(m) => m.snapshot().await,
+            Player::Mpris(m) => {
+                let mut st = m.snapshot().await;
+                // Pear's MPRIS metadata also lags behind the queue after a skip
+                let pear = st.bus_name.as_deref().is_some_and(|n| { let n = n.to_lowercase(); n.contains("pear") || n.contains("youtube") });
+                if pear && !crate::spotify::active() && st.status != "Stopped" {
+                    st = tauri::async_runtime::spawn_blocking(move || { crate::api_player::follow_selected(&mut st); st }).await.unwrap_or_default();
+                }
+                st
+            }
             #[cfg(windows)]
             Player::Smtc(m) => m.snapshot().await,
             Player::Api(a) => a.snapshot().await,

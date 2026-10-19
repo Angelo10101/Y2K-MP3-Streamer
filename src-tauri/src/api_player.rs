@@ -21,8 +21,6 @@ struct Inner {
     volume: f64,
     shuffle: bool,
     loop_status: String,
-    /// The queue's selected entry; `/api/v1/song` can lag behind it until the next pause/play.
-    selected: Option<crate::pear::QueueItem>,
 }
 
 #[derive(Clone)]
@@ -65,13 +63,29 @@ pub fn song_to_state(v: Option<&Value>) -> PlayerState {
     s
 }
 
+static SELECTED: Mutex<Option<(Instant, Option<crate::pear::QueueItem>)>> = Mutex::new(None);
+
+/// Applies [`follow_queue`] with the queue's selected entry, read at most every `SLOW_EVERY`.
+/// Blocking; used for Pear's API and for Pear's MPRIS metadata, which lags the same way.
+pub fn follow_selected(st: &mut PlayerState) {
+    let stale = SELECTED.lock().unwrap().as_ref().map_or(true, |(t, _)| t.elapsed() > SLOW_EVERY);
+    if stale {
+        let sel = crate::pear::queue().ok().map(|q| q.into_iter().find(|i| i.selected));
+        let mut c = SELECTED.lock().unwrap();
+        let keep = c.as_ref().and_then(|(_, i)| i.clone());
+        *c = Some((Instant::now(), sel.unwrap_or(keep)));
+    }
+    if let Some((_, Some(sel))) = &*SELECTED.lock().unwrap() { follow_queue(st, sel); }
+}
+
 /// `/api/v1/song` keeps describing the previous track after a skip until the player is paused
 /// or resumed, while the queue already marks the new one as selected; trust the queue then.
 pub fn follow_queue(s: &mut PlayerState, sel: &crate::pear::QueueItem) {
-    if sel.video_id.is_empty() || s.track_id == sel.video_id || s.status == "Stopped" {
+    // MPRIS track ids are D-Bus paths that may embed the video id, so also compare titles
+    if sel.video_id.is_empty() || s.track_id.contains(&sel.video_id) || (s.title == sel.title && !s.title.is_empty()) || s.status == "Stopped" {
         return;
     }
-    s.track_id = sel.video_id.clone();
+    if !s.track_id.starts_with('/') { s.track_id = sel.video_id.clone(); }
     s.title = sel.title.clone();
     s.artist = sel.artist.clone();
     s.album = String::new();
@@ -97,7 +111,6 @@ impl PearApi {
                 volume: 1.0,
                 shuffle: false,
                 loop_status: "None".into(),
-                selected: None,
             })),
         }
     }
@@ -121,18 +134,17 @@ impl PearApi {
             let vol = get("/api/v1/volume").ok().flatten().and_then(|v| v["state"].as_f64());
             let shuffle = get("/api/v1/shuffle").ok().flatten().and_then(|v| v["state"].as_bool());
             let repeat = get("/api/v1/repeat-mode").ok().flatten().and_then(|v| v["mode"].as_str().map(String::from));
-            let selected = crate::pear::queue().ok().map(|q| q.into_iter().find(|i| i.selected));
             inner = self.inner.lock().unwrap();
-            if let Some(sel) = selected { inner.selected = sel; }
             if let Some(v) = vol { inner.volume = (v / 100.0).clamp(0.0, 1.0); }
             if let Some(v) = shuffle { inner.shuffle = v; }
             if let Some(m) = repeat { inner.loop_status = repeat_to_loop(&m).into(); }
         }
-        if let Some(sel) = &inner.selected { follow_queue(&mut st, sel); }
         st.volume = inner.volume;
         st.shuffle = inner.shuffle;
         st.loop_status = inner.loop_status.clone();
-        inner.last = st.clone();
+        drop(inner);
+        follow_selected(&mut st);
+        self.inner.lock().unwrap().last = st.clone();
         st
     }
 
