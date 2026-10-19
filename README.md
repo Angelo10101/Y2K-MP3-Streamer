@@ -1,4 +1,4 @@
-# retro-mp3-yt-music
+# Y2K-MP3-Streamer
 Y2K themed front-end for YouTube Music (Linux, Windows) and Spotify (Linux, Windows)
 
 ![The Headspace skin running in this app](docs/screenshot.png)
@@ -43,11 +43,11 @@ YouTube Music desktop app  --MPRIS (Linux) / local HTTP API (Windows)-->  Tauri 
    `cava` is optional (no visualizer without it). Other distros: see the [Tauri 2 prerequisites](https://tauri.app/start/prerequisites/#linux).
 2. Clone and install JS dependencies:
    ```sh
-   git clone https://github.com/Angelo10101/retro-mp3-yt-music.git && cd retro-mp3-yt-music
+   git clone https://github.com/Angelo10101/Y2K-MP3-Streamer.git && cd Y2K-MP3-Streamer
    npm install
    ```
 3. **Add a skin.** Skins are copyrighted and are *not* in this repo (`skins/` is gitignored). Put `.wmz` files in `skins/`, e.g. `skins/Headspace.wmz`. Old WMP skins are collected at the [Internet Archive](https://archive.org/details/windowsmediaplayerskinscollection).
-   - Skins are searched for in `$RETRO_SKINS_DIR`, `./skins`, next to the executable, then `~/.local/share/retro-mp3-yt-music/skins`.
+   - Skins are searched for in `$RETRO_SKINS_DIR`, `./skins`, next to the executable, then `~/.local/share/y2k-mp3-streamer/skins` (the old `~/.local/share/retro-mp3-yt-music/skins` from before the rename still works).
    - To try the app without a real skin: `python3 scripts/make_test_skin.py` generates a small original `skins/TestSkin.wmz`.
 4. Nothing else to do for the player: on first launch this app starts Pear itself and, if needed, edits Pear's config (`~/.config/YouTube Music/config.json`, a backup is saved as `config.json.bak-retro-mp3`) to enable the MPRIS and API-server plugins, hide-to-tray on close, and no auto-resume. Log in to your Google account once in Pear's window.
 5. Run this app:
@@ -74,7 +74,7 @@ RETRO_SOURCE=spotify npm run tauri dev
 - No config is touched: unlike Pear, Spotify needs no plugins or settings changes.
 - Differences from YouTube Music: the playlist drawer shows only the current track (Spotify exposes no queue over MPRIS), and seeking, volume, shuffle and repeat work only as far as your Spotify version implements them over MPRIS. The visualizer (cava) is unchanged since it listens to PipeWire.
 - **Windows:** install the Spotify desktop app (installer or Microsoft Store), then in PowerShell `$env:RETRO_SOURCE = "spotify"; npm run tauri dev`. The app starts Spotify from `%APPDATA%\Spotify\Spotify.exe`, or via the `spotify:` link for the Store version (`RETRO_SPOTIFY_CMD` can point at an `.exe`). Windows differences: **volume can't be controlled** (the media session has none; use Spotify or the system volume), the position is advanced locally between Spotify's updates, the album art is read from the session, and **Home** launches Spotify again, which focuses its window. The visualizer captures all system audio, as with Pear.
-- To make it permanent put `RETRO_SOURCE=spotify` in your launcher or compositor config, e.g. `exec-once = env RETRO_SOURCE=spotify /path/to/retro-mp3-yt-music` in Hyprland.
+- To make it permanent put `RETRO_SOURCE=spotify` in your launcher or compositor config, e.g. `exec-once = env RETRO_SOURCE=spotify /path/to/y2k-mp3-streamer` in Hyprland.
 
 ## Install (Windows 10/11)
 
@@ -89,11 +89,11 @@ RETRO_SOURCE=spotify npm run tauri dev
 2. **Install Pear Desktop** (the playback engine): download the Windows installer from the [releases page](https://github.com/pear-devs/pear-desktop/releases), or try `winget search "YouTube Music"`. This app looks for `%LOCALAPPDATA%\Programs\youtube-music\YouTube Music.exe` (and a few similar places); if yours lives elsewhere, set `RETRO_PEAR_CMD` to the full path of the `.exe`.
 3. **Clone and install**
    ```powershell
-   git clone https://github.com/Angelo10101/retro-mp3-yt-music.git
-   cd retro-mp3-yt-music
+   git clone https://github.com/Angelo10101/Y2K-MP3-Streamer.git
+   cd Y2K-MP3-Streamer
    npm install
    ```
-4. **Add skins** to the `skins\` folder in the project (or to `%APPDATA%\retro-mp3-yt-music\skins`). They are not in the repo; get `.wmz` files from the [Internet Archive collection](https://archive.org/details/windowsmediaplayerskinscollection), or run `python scripts/make_test_skin.py` for a small generated one.
+4. **Add skins** to the `skins\` folder in the project (or to `%APPDATA%\y2k-mp3-streamer\skins`; the old `%APPDATA%\retro-mp3-yt-music\skins` still works). They are not in the repo; get `.wmz` files from the [Internet Archive collection](https://archive.org/details/windowsmediaplayerskinscollection), or run `python scripts/make_test_skin.py` for a small generated one.
 5. **Run it**
    ```powershell
    npm run tauri dev       # development
@@ -126,20 +126,20 @@ How it differs from Linux:
 
 > **Status:** the code paths are the same as on X11 and the window setup is standard GTK, but this has not been run on Hyprland or Plasma yet. Treat the rules below as a starting point.
 
-The app is a frameless, transparent, fixed 900x600 window. On a Wayland compositor you tell it how to treat that window with window rules; the Wayland app id is normally `retro-mp3-yt-music` (check yours with `hyprctl clients`).
+The app is a frameless, transparent, fixed 900x600 window. On a Wayland compositor you tell it how to treat that window with window rules; the Wayland app id is normally `y2k-mp3-streamer` (check yours with `hyprctl clients`).
 
-**Hyprland** (`hyprland.conf`; Hyprland 0.53+ syntax, older versions use `windowrulev2 = float, class:^(retro-mp3-yt-music)$` and so on):
+**Hyprland** (`hyprland.conf`; Hyprland 0.53+ syntax, older versions use `windowrulev2 = float, class:^(y2k-mp3-streamer)$` and so on):
 ```ini
-windowrule = float on,      match:class ^(retro-mp3-yt-music)$
-windowrule = no_shadow on,  match:class ^(retro-mp3-yt-music)$
-windowrule = no_blur on,    match:class ^(retro-mp3-yt-music)$
-windowrule = no_anim on,    match:class ^(retro-mp3-yt-music)$
-windowrule = border_size 0, match:class ^(retro-mp3-yt-music)$
-windowrule = pin on,        match:class ^(retro-mp3-yt-music)$   # optional: always on top, on every workspace
+windowrule = float on,      match:class ^(y2k-mp3-streamer)$
+windowrule = no_shadow on,  match:class ^(y2k-mp3-streamer)$
+windowrule = no_blur on,    match:class ^(y2k-mp3-streamer)$
+windowrule = no_anim on,    match:class ^(y2k-mp3-streamer)$
+windowrule = border_size 0, match:class ^(y2k-mp3-streamer)$
+windowrule = pin on,        match:class ^(y2k-mp3-streamer)$   # optional: always on top, on every workspace
 ```
 Without these the window is tiled, and Hyprland draws a border, shadow and blur through the transparent parts. Dragging the skin body moves the window as usual.
 
-**KDE Plasma** (Wayland or X11): transparency works out of the box with KWin's compositor. In *System Settings > Window Management > Window Rules* add a rule matching the window class `retro-mp3-yt-music` and force *No titlebar and frame* (if a frame shows), *Keep above* (the app's "Always on top" menu item can't do this on Wayland) and, if you like, *Skip taskbar*.
+**KDE Plasma** (Wayland or X11): transparency works out of the box with KWin's compositor. In *System Settings > Window Management > Window Rules* add a rule matching the window class `y2k-mp3-streamer` and force *No titlebar and frame* (if a frame shows), *Keep above* (the app's "Always on top" menu item can't do this on Wayland) and, if you like, *Skip taskbar*.
 
 **Both:**
 - Hiding Pear's window only works on X11 and Windows, so with Pear on Wayland its window and the companion panel both stay visible (Spotify mode never hides its window either).
@@ -148,7 +148,7 @@ Without these the window is tiled, and Hyprland draws a border, shadow and blur 
 - `cava` reads PipeWire, so the visualizer works the same on Wayland. Install `cava` for it.
 
 ### Tiling window managers (i3, sway)
-The window sets a utility type hint so i3 floats it automatically. If yours still tiles it, add `for_window [class="Retro-mp3-yt-music"] floating enable` to your i3 config. The window has no titlebar; drag the skin body to move it.
+The window sets a utility type hint so i3 floats it automatically. If yours still tiles it, add `for_window [class="Y2k-mp3-streamer"] floating enable` to your i3 config. The window has no titlebar; drag the skin body to move it.
 
 ### Rendering stalls (window only updates when hovered)
 On some Linux setups a WebKitGTK window stops updating until it is focused or hovered, typically after another (tiled) window such as Pear's moves onto the same monitor. This was reproduced with a bare WebKitGTK test window, so it is not specific to this app, and none of the WebKit rendering modes or in-app redraw tricks I tried fixed it. Two things help:

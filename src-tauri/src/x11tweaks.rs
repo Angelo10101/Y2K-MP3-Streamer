@@ -34,7 +34,7 @@ fn try_mark() -> Result<bool, Box<dyn std::error::Error>> {
     let mut done = false;
     for w in wins {
         let cls = conn.get_property(false, w, AtomEnum::WM_CLASS, AtomEnum::STRING, 0, 256)?.reply()?;
-        if String::from_utf8_lossy(&cls.value).contains("Retro-mp3-yt-music") {
+        if String::from_utf8_lossy(&cls.value).contains("Y2k-mp3-streamer") {
             conn.change_property32(PropMode::REPLACE, w, extents, AtomEnum::CARDINAL, &[0, 0, 0, 0])?;
             done = true;
         }

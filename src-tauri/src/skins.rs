@@ -5,8 +5,9 @@ use std::path::PathBuf;
 use serde::Serialize;
 
 /// Skin search order: `$RETRO_SKINS_DIR`, `./skins`, `../skins` (cargo-run from
-/// `src-tauri`), next to the executable, then `~/.local/share/retro-mp3-yt-music/skins` (Linux) or
-/// `%APPDATA%\retro-mp3-yt-music\skins` (Windows).
+/// `src-tauri`), next to the executable, then `~/.local/share/y2k-mp3-streamer/skins` (Linux) or
+/// `%APPDATA%\y2k-mp3-streamer\skins` (Windows). The `retro-mp3-yt-music` folders the app used
+/// before it was renamed are still searched, after the new ones.
 pub fn skins_dir() -> PathBuf {
     let mut candidates: Vec<PathBuf> = vec![];
     if let Ok(d) = std::env::var("RETRO_SKINS_DIR") {
@@ -19,11 +20,13 @@ pub fn skins_dir() -> PathBuf {
             candidates.push(dir.join("skins"));
         }
     }
-    if let Some(home) = std::env::var_os("HOME") {
-        candidates.push(PathBuf::from(home).join(".local/share/retro-mp3-yt-music/skins"));
-    }
-    if let Some(appdata) = std::env::var_os("APPDATA") {
-        candidates.push(PathBuf::from(appdata).join("retro-mp3-yt-music").join("skins"));
+    for app in ["y2k-mp3-streamer", "retro-mp3-yt-music"] {
+        if let Some(home) = std::env::var_os("HOME") {
+            candidates.push(PathBuf::from(home).join(".local/share").join(app).join("skins"));
+        }
+        if let Some(appdata) = std::env::var_os("APPDATA") {
+            candidates.push(PathBuf::from(appdata).join(app).join("skins"));
+        }
     }
     candidates
         .iter()

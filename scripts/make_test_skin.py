@@ -55,7 +55,7 @@ def panel(x, y):
     return (30, 70, 40) if x < 90 and y < 100 else MAGENTA
 
 wms = f'''<?xml version="1.0"?>
-<THEME title="Test Skin" author="retro-mp3-yt-music">
+<THEME title="Test Skin" author="Y2K-MP3-Streamer">
  <VIEW width="{W}" height="{H}" backgroundImage="body.bmp" clippingColor="#FF00FF" scriptFile="test.js" onload="jscript:init();">
   <TEXT id="title" left="20" top="14" width="280" height="18" fontFace="Arial" fontSize="11" foregroundColor="#c8ffd2"
         value="wmpprop:player.currentMedia.name" scrolling="true" onclick="jscript:player.controls.pause();"/>

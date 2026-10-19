@@ -30,7 +30,7 @@ pub async fn run(app: AppHandle) {
     let status = |available: bool, reason: Option<String>| {
         let _ = app.emit("viz-status", VizStatus { available, reason });
     };
-    let path = std::env::temp_dir().join("retro-mp3-yt-music-cava.conf");
+    let path = std::env::temp_dir().join("y2k-mp3-streamer-cava.conf");
     if let Err(e) = std::fs::write(&path, config()) {
         return status(false, Some(format!("cannot write cava config: {e}")));
     }

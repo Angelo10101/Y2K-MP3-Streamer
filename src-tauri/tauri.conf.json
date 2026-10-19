@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "retro-mp3-yt-music",
+  "productName": "Y2K-MP3-Streamer",
   "version": "0.1.0",
-  "identifier": "dev.retromp3.ytmusic",
+  "identifier": "dev.y2k.mp3streamer",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "retro-mp3-yt-music",
+        "title": "Y2K-MP3-Streamer",
         "width": 900,
         "height": 600,
         "decorations": false,

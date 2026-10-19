@@ -27,7 +27,7 @@ export class Panel {
       ? `<div class="row">Skin: <select id="skin">${info.skins.map((s) => `<option${s === info.selected ? " selected" : ""}>${s.replace(/\.wmz$/i, "")}</option>`).join("")}</select><button id="player">Open player</button></div>`
       : `<div class="msg">No skins found. Put a <code>.wmz</code> file (e.g. <code>Headspace.wmz</code>) in <code>${info.skinsDir}</code>.</div>`;
     this.el.innerHTML = `
-      <h1 data-tauri-drag-region>retro-mp3-yt-music: home</h1>
+      <h1 data-tauri-drag-region>Y2K-MP3-Streamer: home</h1>
       <div class="row"><button id="yt">Open ${sourceName}</button></div>
       ${info.message ? `<div class="msg">${info.message}</div>` : ""}
       <div id="offline" class="msg"></div>
