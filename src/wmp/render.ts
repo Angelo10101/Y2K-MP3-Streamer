@@ -197,6 +197,8 @@ export class SkinWindow {
       savePreference: (k: string, v: unknown) => { try { localStorage.setItem(`pref:${this.skin.name}:${k}`, String(v)); } catch { /* ignore */ } },
       // file dialogs are not supported: we never open media ourselves
       openDialog: () => "",
+      // sound effects are not played, but skins call this unguarded (Disney Mix Central's intro)
+      playSound: () => {},
     });
     s.alert = (m: unknown) => console.info("[skin alert]", m);
   }
@@ -756,6 +758,9 @@ export class SkinWindow {
     el.dom.appendChild(span);
     el.dom.classList.add("skin-text");
     const a = el.attrs, d = el.dom.style;
+    // string-table entries (`<text id="locShowPl" toolTip="..."/>`) carry no geometry or font: they are
+    // data for scripts, never drawn (WMP clips them away in a zero-sized subview)
+    if (a.left === undefined && a.top === undefined && a.width === undefined && a.fontsize === undefined && a.foregroundcolor === undefined) d.display = "none";
     const face = a.fontface ?? a.fonttype;
     d.fontFamily = face ? `"${face}", sans-serif` : "sans-serif";
     d.fontSize = `${num(a.fontsize, 10)}pt`;
