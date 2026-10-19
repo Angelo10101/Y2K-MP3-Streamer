@@ -51,7 +51,7 @@ impl Smtc {
     }
 
     fn session() -> windows::core::Result<Option<Session>> {
-        let sessions = Manager::RequestAsync()?.get()?.GetSessions()?;
+        let sessions = Manager::RequestAsync()?.join()?.GetSessions()?;
         for s in sessions {
             if s.SourceAppUserModelId()?.to_string().to_lowercase().contains("spotify") {
                 return Ok(Some(s));
@@ -74,7 +74,7 @@ impl Smtc {
     }
 
     fn read_state(&self, s: &Session) -> windows::core::Result<PlayerState> {
-        let props = s.TryGetMediaPropertiesAsync()?.get()?;
+        let props = s.TryGetMediaPropertiesAsync()?.join()?;
         let info = s.GetPlaybackInfo()?;
         let status = match info.PlaybackStatus()? {
             Status::Playing => "Playing",
@@ -129,22 +129,22 @@ impl Smtc {
         let s = Self::session().map_err(e)?.ok_or("Spotify is not running")?;
         let ok = |accepted: bool| if accepted { Ok(()) } else { Err(format!("Spotify rejected `{cmd}`")) };
         match cmd {
-            "play" => ok(s.TryPlayAsync().map_err(e)?.get().map_err(e)?),
-            "pause" => ok(s.TryPauseAsync().map_err(e)?.get().map_err(e)?),
-            "play_pause" => ok(s.TryTogglePlayPauseAsync().map_err(e)?.get().map_err(e)?),
-            "stop" => ok(s.TryStopAsync().map_err(e)?.get().map_err(e)?),
-            "next" => ok(s.TrySkipNextAsync().map_err(e)?.get().map_err(e)?),
-            "previous" => ok(s.TrySkipPreviousAsync().map_err(e)?.get().map_err(e)?),
+            "play" => ok(s.TryPlayAsync().map_err(e)?.join().map_err(e)?),
+            "pause" => ok(s.TryPauseAsync().map_err(e)?.join().map_err(e)?),
+            "play_pause" => ok(s.TryTogglePlayPauseAsync().map_err(e)?.join().map_err(e)?),
+            "stop" => ok(s.TryStopAsync().map_err(e)?.join().map_err(e)?),
+            "next" => ok(s.TrySkipNextAsync().map_err(e)?.join().map_err(e)?),
+            "previous" => ok(s.TrySkipPreviousAsync().map_err(e)?.join().map_err(e)?),
             "seek_to" => seek(&s, num.unwrap_or(0.0)),
             "seek_by" => seek(&s, self.read_state(&s).map_err(e)?.position_s + num.unwrap_or(0.0)),
-            "shuffle" => ok(s.TryChangeShuffleActiveAsync(num.unwrap_or(0.0) != 0.0).map_err(e)?.get().map_err(e)?),
+            "shuffle" => ok(s.TryChangeShuffleActiveAsync(num.unwrap_or(0.0) != 0.0).map_err(e)?.join().map_err(e)?),
             "loop" => {
                 let mode = match text.as_deref() {
                     Some("Track") => Repeat::Track,
                     Some("Playlist") => Repeat::List,
                     _ => Repeat::None,
                 };
-                ok(s.TryChangeAutoRepeatModeAsync(mode).map_err(e)?.get().map_err(e)?)
+                ok(s.TryChangeAutoRepeatModeAsync(mode).map_err(e)?.join().map_err(e)?)
             }
             "volume" => Ok(()), // SMTC has no volume control
             other => Err(format!("unknown command: {other}")),
@@ -156,17 +156,17 @@ fn seek(s: &Session, secs: f64) -> Result<(), String> {
     let e = |e: windows::core::Error| e.to_string();
     let start = s.GetTimelineProperties().and_then(|t| t.StartTime()).map(|d| d.Duration).unwrap_or(0);
     let ticks = start + (secs.max(0.0) * TICKS) as i64;
-    s.TryChangePlaybackPositionAsync(ticks).map_err(e)?.get().map_err(e)?;
+    s.TryChangePlaybackPositionAsync(ticks).map_err(e)?.join().map_err(e)?;
     Ok(())
 }
 
 /// The track's thumbnail as a `data:` URL (SMTC hands out a stream, not a URL).
 fn read_art(props: &windows::Media::Control::GlobalSystemMediaTransportControlsSessionMediaProperties) -> Option<String> {
-    let stream = props.Thumbnail().ok()?.OpenReadAsync().ok()?.get().ok()?;
+    let stream = props.Thumbnail().ok()?.OpenReadAsync().ok()?.join().ok()?;
     let random: IRandomAccessStream = stream.cast().ok()?;
     let size = u32::try_from(random.Size().ok()?).ok().filter(|n| *n > 0 && *n < 8_000_000)?;
     let reader = DataReader::CreateDataReader(&random.GetInputStreamAt(0).ok()?).ok()?;
-    reader.LoadAsync(size).ok()?.get().ok()?;
+    reader.LoadAsync(size).ok()?.join().ok()?;
     let mut buf = vec![0u8; size as usize];
     reader.ReadBytes(&mut buf).ok()?;
     let mime = stream
