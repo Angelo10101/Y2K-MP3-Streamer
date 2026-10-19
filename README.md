@@ -31,7 +31,7 @@ YouTube Music desktop app  --MPRIS (Linux) / local HTTP API (Windows)-->  Tauri 
    `cava` is optional (no visualizer without it). Other distros: see the [Tauri 2 prerequisites](https://tauri.app/start/prerequisites/#linux).
 2. Clone and install JS dependencies:
    ```sh
-   git clone <this repo> && cd retro-mp3-yt-music
+   git clone https://github.com/Angelo10101/retro-mp3-yt-music.git && cd retro-mp3-yt-music
    npm install
    ```
 3. **Add a skin.** Skins are copyrighted and are *not* in this repo (`skins/` is gitignored). Put `.wmz` files in `skins/`, e.g. `skins/Headspace.wmz`. Old WMP skins are collected at the [Internet Archive](https://archive.org/details/windowsmediaplayerskinscollection).
@@ -77,7 +77,7 @@ RETRO_SOURCE=spotify npm run tauri dev
 2. **Install Pear Desktop** (the playback engine): download the Windows installer from the [releases page](https://github.com/pear-devs/pear-desktop/releases), or try `winget search "YouTube Music"`. This app looks for `%LOCALAPPDATA%\Programs\youtube-music\YouTube Music.exe` (and a few similar places); if yours lives elsewhere, set `RETRO_PEAR_CMD` to the full path of the `.exe`.
 3. **Clone and install**
    ```powershell
-   git clone <this repo>
+   git clone https://github.com/Angelo10101/retro-mp3-yt-music.git
    cd retro-mp3-yt-music
    npm install
    ```
