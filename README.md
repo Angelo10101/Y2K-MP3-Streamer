@@ -16,6 +16,7 @@ audio-driven visualisers (cava on Linux, WASAPI loopback on Windows).
 Inspired something I saw on IG: https://www.instagram.com/p/Delqq-ngEdE/
 
 Pulling skins from old Windows Media Player skins: https://archive.org/details/windowsmediaplayerskinscollection
+
 Another winamp skins site for you guys to choose from: https://skins.webamp.org/
 
 If you find a skin you like, make an issue for me to add it
