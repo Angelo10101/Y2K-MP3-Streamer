@@ -1,13 +1,24 @@
 # retro-mp3-yt-music
 Y2K themed front-end for YouTube Music (Linux, Windows) and Spotify (Linux, Windows)
 
+![The Headspace skin running in this app](docs/screenshot.png)
+
+*The skin shown is not mine. It was designed by Microsoft for Windows Media Player; this image is only here to show what the app looks like with a skin loaded. The skins are not included in this repo (see below).*
+
+![The Alienware Invader skin running in this app](docs/screenshot-alienware.png)
+
+*Also not mine: the Alienware Invader skin, made by The Skins Factory (the Alienware name and logo belong to their owner). Shown only to illustrate the app.*
+
 Has swappable retro skins and real audio visualizer.
 Controls playback (MPRIS on Linux, Pear's local API on Windows; Spotify over MPRIS on Linux and the Windows media session on Windows) and renders in custom retro skins with
 audio-driven visualisers (cava on Linux, WASAPI loopback on Windows).
 
-Inspired by a reel: https://www.instagram.com/p/Delqq-ngEdE/
+Inspired something I saw on IG: https://www.instagram.com/p/Delqq-ngEdE/
 
 Pulling skins from old Windows Media Player skins: https://archive.org/details/windowsmediaplayerskinscollection
+Another winamp skins site for you guys to choose from: https://skins.webamp.org/
+
+If you find a skin you like, make an issue for me to add it
 
 ## How it works
 
@@ -217,3 +228,9 @@ node_modules/.bin/tsc --noEmit
 cd src-tauri && cargo test  # config patching, API mapping, FFT analyzer
 cd src-tauri && cargo test live -- --ignored --nocapture   # talks to a running Pear's API
 ```
+
+## Credits
+Created by Angelo Bastos. Much of the code, including the Windows and Spotify backends and the skin support, was written with [Claude](https://claude.com/claude-code) (Anthropic's AI model, via Claude Code), working from my direction and testing.
+Claude also wrote the install instructions for Spotify, KDE and Windows users.
+
+If AI must relieve me of my passions it may relieve me of my labour too
