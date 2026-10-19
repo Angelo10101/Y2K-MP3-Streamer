@@ -78,6 +78,8 @@ export class WinampWindow {
   private queueTimer = 0;
   private mainRegion: [number, number][][] = [];
   private scale = 2;
+  /** The monitor's height in CSS pixels (0 until known). */
+  private monitorH = 0;
   // which extra windows are open
   private eqOpen = flag("winamp-eq", false);
   private plOpen = flag("winamp-pl", false);
@@ -114,6 +116,12 @@ export class WinampWindow {
     this.plStyle = parsePledit(this.text("pledit.txt") ?? "");
     this.mainRegion = parseRegion(this.text("region.txt") ?? "");
     this.buildButtons();
+    // the webview's own screen.* values are unreliable, so ask Tauri how tall the monitor is
+    try {
+      const { currentMonitor } = await import("@tauri-apps/api/window");
+      const m = await currentMonitor();
+      if (m) this.monitorH = m.size.height / m.scaleFactor;
+    } catch { /* fall back to the app window's height */ }
 
     this.root.id = "skin-root";
     Object.assign(this.canvas.style, { imageRendering: "pixelated", display: "block", position: "absolute", left: "0", top: "0" });
@@ -160,7 +168,8 @@ export class WinampWindow {
         })
       : [[0, 0, W * s, MAIN_H * s]];
     if (this.totalH > MAIN_H) out.push([0, MAIN_H * s, W * s, (this.totalH - MAIN_H) * s]);
-    return out;
+    // the backend takes whole pixels (a fractional scale would otherwise make the call fail)
+    return out.map(([x, y, w, h]) => [Math.floor(x), Math.floor(y), Math.ceil(w) + 1, Math.ceil(h) + 1]);
   }
 
   /**
@@ -170,7 +179,7 @@ export class WinampWindow {
    */
   private layout() {
     const total = this.totalH;
-    const budget = Math.min(window.innerHeight, (window.screen.availHeight || window.innerHeight) * 0.6);
+    const budget = Math.min(window.innerHeight, (this.monitorH || window.innerHeight) * 0.6);
     this.scale = Math.max(1, Math.floor(Math.min(2, budget / total) * 8) / 8);
     const s = this.scale;
     this.canvas.height = total;
@@ -313,8 +322,7 @@ export class WinampWindow {
       const at = this.locate(x, y);
       if (!at) return;
       const { win, lx, ly } = at;
-      const btn = [...this.buttons].reverse().find((q) => q.win === win && inside(q, lx, ly));
-      if (btn) { this.pressed = btn.id; capture(e); return; }
+      const btn = [...this.buttons].reverse().find((q) => q.win === win && inside(q, lx, ly));      if (btn) { this.pressed = btn.id; capture(e); return; }
       if (win === "main") {
         if (inside(VOL, lx, ly)) { this.drag = { kind: "vol" }; this.setVolumeAt(lx); capture(e); return; }
         if (inside(SEEK, lx, ly) && this.player.state.length_s > 0) { this.drag = { kind: "seek" }; this.seekAt(lx); capture(e); return; }
