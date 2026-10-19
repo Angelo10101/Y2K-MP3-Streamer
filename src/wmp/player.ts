@@ -62,7 +62,12 @@ export class PlayerShim {
     this.state = s;
     this.stateAt = performance.now();
     if (prev.status !== s.status) this.emit("playstatechange", this.playState);
-    if (prev.track_id !== s.track_id || prev.title !== s.title) this.emit("mediachange");
+    if (prev.track_id !== s.track_id || prev.title !== s.title) {
+      this.emit("mediachange");
+      // WMP also goes through a play-state change on every track change, and skins such as
+      // tubeframe refresh their title only from that handler
+      if (prev.status === s.status) this.emit("playstatechange", this.playState);
+    }
     if (prev.running !== s.running) this.emit("openstatechange", s.running ? 13 : 0);
   }
   private emit(e: PlayerEvent, arg?: number) { for (const l of this.listeners) l(e, arg); }
