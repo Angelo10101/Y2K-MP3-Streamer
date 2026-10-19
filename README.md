@@ -13,7 +13,7 @@ Has swappable retro skins and real audio visualizer.
 Controls playback (MPRIS on Linux, Pear's local API on Windows; Spotify over MPRIS on Linux and the Windows media session on Windows) and renders in custom retro skins with
 audio-driven visualisers (cava on Linux, WASAPI loopback on Windows).
 
-Inspired something I saw on IG: https://www.instagram.com/p/Delqq-ngEdE/
+Inspired by something I saw on IG: https://www.instagram.com/p/Delqq-ngEdE/
 
 Pulling skins from old Windows Media Player skins: https://archive.org/details/windowsmediaplayerskinscollection
 
