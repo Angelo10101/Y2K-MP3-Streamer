@@ -27,6 +27,36 @@ export function vizPresets(): PresetEntry[] {
 
 export const vizLabel = (p: PresetEntry) => (p.group === p.name ? p.name : `${p.group}: ${p.name}`);
 
+export const BASIC_PRESETS = ["Bars", "Mirror", "Scope", "Dots"];
+/** The four basic modes keep indices 0-3; WMP's own visualizations follow once the engine has loaded. */
+export const effectPresets = () => [...BASIC_PRESETS, ...vizPresets().map(vizLabel)];
+
+/** The chosen visualization, shared by every effects element and the home panel. Kept by name, so it
+ *  survives changes to the list, and remembered between runs. */
+const CHOICE_KEY = "viz";
+let choice = (() => { try { return localStorage.getItem(CHOICE_KEY) ?? BASIC_PRESETS[0]; } catch { return BASIC_PRESETS[0]; } })();
+export const getViz = () => choice;
+export function setViz(name: string) {
+  choice = name;
+  try { localStorage.setItem(CHOICE_KEY, name); } catch { /* ignore */ }
+}
+/** Index into effectPresets(); 0 (Bars) until the engine has loaded if the choice is one of its presets. */
+export const vizIndex = () => Math.max(0, effectPresets().indexOf(choice));
+export function setVizIndex(i: number) {
+  const list = effectPresets();
+  if (Number.isFinite(i)) setViz(list[((Math.trunc(i) % list.length) + list.length) % list.length]);
+}
+/** For the home panel's menu: the basic modes, then each of WMP's families. */
+export function vizMenu(): { group: string; items: { value: string; text: string }[] }[] {
+  const out = [{ group: "Basic", items: BASIC_PRESETS.map((n) => ({ value: n, text: n })) }];
+  for (const p of vizPresets()) {
+    let g = out.find((x) => x.group === p.group);
+    if (!g) out.push(g = { group: p.group, items: [] });
+    g.items.push({ value: vizLabel(p), text: vizLabel(p) });
+  }
+  return out;
+}
+
 // Cava's bands run roughly 50 Hz to 10 kHz on a log scale; WMP's 1024 bins are linear to 22 kHz.
 const LO_HZ = 50, HI_HZ = 10000, BIN_HZ = 22050 / 1024, RATE = 44100;
 const N = 1024;

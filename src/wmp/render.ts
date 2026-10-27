@@ -8,7 +8,7 @@ import type { PlayerShim } from "./player";
 import { ci, fmtTime } from "./player";
 import { overrideFor, type SkinOverride } from "./overrides";
 import { Scope } from "./scope";
-import { loadViz, VizView, vizLabel, vizPresets } from "./viz";
+import { BASIC_PRESETS, effectPresets, loadViz, setVizIndex, VizView, vizIndex, vizPresets } from "./viz";
 import type { Skin } from "./skin";
 import type { WmsNode } from "./xml";
 
@@ -39,9 +39,6 @@ const BUILTIN: Record<string, string> = {
   ffelement: "ff", ffbutton: "ff", rwelement: "rw", rwbutton: "rw",
   shuffleelement: "shuffle", shufflebutton: "shuffle", repeatelement: "repeat", repeatbutton: "repeat",
 };
-const BASIC_PRESETS = ["Bars", "Mirror", "Scope", "Dots"];
-/** The four basic modes keep indices 0-3; WMP's own visualizations follow once the engine has loaded. */
-const effectPresets = () => [...BASIC_PRESETS, ...vizPresets().map(vizLabel)];
 const WMP_CONSTANTS: Record<string, number> = {
   osUndefined: 0, osPlaylistChanging: 1, osPlaylistLocating: 2, osPlaylistConnecting: 3, osPlaylistLoading: 4,
   osPlaylistOpening: 5, osPlaylistOpenNoMedia: 6, osPlaylistChanged: 7, osMediaChanging: 8, osMediaLocating: 9,
@@ -65,7 +62,6 @@ class El {
   down = false;
   dragging = false;
   lastSig = "";
-  preset = 0;
   /** an empty container laid out as a zero-size box, so it can never hide the elements beneath it */
   collapsed = false;
   api!: Record<string, unknown>;
@@ -172,7 +168,7 @@ export class SkinWindow {
     const self = this;
     s.player = this.player.api;
     Object.assign(s, WMP_CONSTANTS);
-    s.mediacenter = { effectType: "", effectPreset: 0 };
+    s.mediacenter = { effectType: "", get effectPreset() { return vizIndex(); }, set effectPreset(v: unknown) { setVizIndex(Number(v)); } };
     s.view = ci({
       get width() { return w; }, get height() { return h; },
       set width(v: number) { w = num(v); self.resizeView(w, h); },
@@ -810,7 +806,8 @@ export class SkinWindow {
       ctx.clearRect(0, 0, w, h);
       if (colorOk(el.attrs.backgroundcolor)) { ctx.fillStyle = el.attrs.backgroundcolor; ctx.fillRect(0, 0, w, h); }
       const bars = this.player.bars.length ? this.player.bars : new Array(32).fill(0);
-      const wmp = vizPresets()[el.preset - BASIC_PRESETS.length];
+      const idx = vizIndex();
+      const wmp = vizPresets()[idx - BASIC_PRESETS.length];
       if (wmp) {
         c.style.display = "none";
         view.draw(wmp, this.player.bars.length ? this.player.bars : new Array(32).fill(0), this.player.state.status === "Playing");
@@ -818,7 +815,7 @@ export class SkinWindow {
       }
       view.hide();
       c.style.display = "";
-      const mode = BASIC_PRESETS[el.preset] ?? "Bars";
+      const mode = BASIC_PRESETS[idx] ?? "Bars";
       const color = el.attrs.foregroundcolor ?? "#77ce07";
       ctx.fillStyle = color; ctx.strokeStyle = color;
       const bw = w / bars.length;
@@ -953,10 +950,10 @@ export class SkinWindow {
           };
           case "reset": return () => { for (const k of Object.keys(el.attrs)) if (/^gainlevel\d/.test(k)) el.attrs[k] = "0"; self.sync(true); };
           case "next": case "previous":
-            if (el.tag === "effects") return () => { el.preset = (el.preset + (key === "next" ? 1 : effectPresets().length - 1)) % effectPresets().length; };
+            if (el.tag === "effects") return () => setVizIndex(vizIndex() + (key === "next" ? 1 : -1));
             break;
-          case "currentpresettitle": if (el.tag === "effects") return effectPresets()[el.preset]; break;
-          case "currentpreset": if (el.tag === "effects") return el.preset; break;
+          case "currentpresettitle": if (el.tag === "effects") return effectPresets()[vizIndex()]; break;
+          case "currentpreset": if (el.tag === "effects") return vizIndex(); break;
           case "currenteffecttype": if (el.tag === "effects") return 0; break;
           case "jscript": case "onclick": return () => self.fire(el, "onclick");
           case "parent": return el.parent?.api;
@@ -979,7 +976,7 @@ export class SkinWindow {
         const key = k.toLowerCase();
         el.attrs[key] = typeof v === "boolean" ? String(v) : String(v);
         if (IMAGE_KEYS.has(key) && el.reloadImages) void el.reloadImages();
-        if (key === "currentpreset" && el.tag === "effects") el.preset = num(v) % effectPresets().length;
+        if (key === "currentpreset" && el.tag === "effects") setVizIndex(num(v));
         if (["left", "top", "width", "height", "visible", "zindex", "alphablend"].includes(key)) {
           el.dom.style.transition = "";
           relayout();

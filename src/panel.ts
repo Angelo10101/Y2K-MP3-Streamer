@@ -2,6 +2,7 @@
 // skin is loaded (with a message telling the user where to put one).
 import { playerCmd, sourceName, type PlayerState } from "./backend";
 import { fmtTime } from "./wmp/player";
+import { getViz, loadViz, setViz, vizMenu } from "./wmp/viz";
 
 export interface PanelInfo {
   skinsDir: string;
@@ -37,6 +38,7 @@ export class Panel {
       <div class="row"><span id="pos">0:00</span><input type="range" id="seek" min="0" max="1" step="0.1" value="0"><span id="len">0:00</span></div>
       <div class="row">vol <input type="range" id="vol" min="0" max="100" value="100"></div>
       <div class="bars" id="bars"></div>
+      <div class="row">Visualization: <select id="viz"></select></div>
       ${skins}`;
     this.el.querySelectorAll<HTMLElement>("[id]").forEach((e) => (this.$[e.id] = e));
     const on = (id: string, f: () => void) => this.$[id]?.addEventListener("click", f);
@@ -48,6 +50,19 @@ export class Panel {
     on("rep", () => playerCmd("loop", undefined, this.last?.loop_status === "None" ? "Playlist" : "None"));
     on("yt", () => info.onOpenYouTube());
     on("player", () => info.onOpenPlayer());
+    const viz = this.$.viz as HTMLSelectElement;
+    const fillViz = () => {
+      viz.replaceChildren(...vizMenu().map((g) => {
+        const og = document.createElement("optgroup");
+        og.label = g.group;
+        og.append(...g.items.map((i) => new Option(i.text, i.value)));
+        return og;
+      }));
+      viz.value = getViz();
+    };
+    fillViz();
+    loadViz(fillViz); // WMP's own visualizations join the menu once the engine has loaded
+    viz.addEventListener("change", () => setViz(viz.value));
     this.$.skin?.addEventListener("change", () => info.onPick((this.$.skin as HTMLSelectElement).value));
     const seek = this.$.seek as HTMLInputElement;
     seek.addEventListener("pointerdown", () => (this.seeking = true));
