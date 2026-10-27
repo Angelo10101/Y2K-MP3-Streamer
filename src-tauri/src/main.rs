@@ -150,6 +150,12 @@ fn set_input_shape(window: tauri::WebviewWindow, rects: Vec<[i32; 4]>) -> Result
 }
 
 fn main() {
+    // WebKitGTK's DMABUF renderer fails on NVIDIA ("Failed to create GBM buffer") and leaves the
+    // window blank; the README's workaround, applied unless the user set the variable themselves
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             player_state,

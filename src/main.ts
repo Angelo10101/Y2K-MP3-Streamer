@@ -8,6 +8,7 @@ import { SkinWindow, type WindowHooks } from "./wmp/render";
 import { loadSkin, pickMainView } from "./wmp/skin";
 import { loadWinampSkin } from "./winamp/skin";
 import { WinampWindow } from "./winamp/window";
+import { keepRepainting } from "./repaint";
 
 type Mode = "home" | "player";
 const app = document.getElementById("app")!;
@@ -184,6 +185,7 @@ document.addEventListener("contextmenu", (e) => {
 });
 
 // ---------- startup ----------
+keepRepainting();
 (async () => {
   onState(emptyState);
   const opts = inTauri ? await startupOptions() : undefined; // also sets the source name used in UI text
