@@ -801,6 +801,17 @@ export class SkinWindow {
     el.canvas = c; el.dom.appendChild(c);
     const view = new VizView(el.dom, w, h);
     loadViz();
+    // A subview's keyed colour (Headspace's white clippingColor) marks pixels of its background as
+    // outside the skin. The 2D modes leave those corners clear, but WMP's own visualizations fill the
+    // whole canvas, so cut them to the background's shape.
+    const bgc = el.parent?.canvas;
+    if (bgc instanceof HTMLCanvasElement && (el.parent!.attrs.clippingcolor || el.parent!.attrs.transparencycolor)) {
+      const d = el.dom.style as CSSStyleDeclaration & { webkitMaskImage: string; webkitMaskSize: string; webkitMaskPosition: string; webkitMaskRepeat: string };
+      d.webkitMaskImage = d.maskImage = `url(${bgc.toDataURL()})`;
+      d.webkitMaskSize = d.maskSize = `${bgc.width}px ${bgc.height}px`;
+      d.webkitMaskPosition = d.maskPosition = `${-this.n(el, "left", 0)}px ${-this.n(el, "top", 0)}px`;
+      d.webkitMaskRepeat = d.maskRepeat = "no-repeat";
+    }
     el.paint = () => {
       const ctx = c.getContext("2d")!;
       ctx.clearRect(0, 0, w, h);
