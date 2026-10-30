@@ -27,11 +27,29 @@ async fn player_state(m: State<'_, Player>) -> Result<player::PlayerState, ()> {
 
 #[tauri::command]
 async fn player_cmd(
+    app: tauri::AppHandle,
     m: State<'_, Player>,
     cmd: String,
     num: Option<f64>,
     text: Option<String>,
 ) -> Result<(), String> {
+    if cmd == "stop" {
+        // Stop quits everything this app started (Pear / Spotify, the skin windows and the app
+        // itself); a player it didn't start, e.g. a browser tab, is only stopped, never closed.
+        // pause first: many players (Pear, browsers) ignore MPRIS Stop
+        let pause = m.command("pause", None, None).await;
+        let stop = m.command(&cmd, num, text).await;
+        if let (Err(p), Err(s)) = (&pause, &stop) {
+            eprintln!("stop: pause failed ({p}), stop failed ({s})");
+        }
+        let _ = tauri::async_runtime::spawn_blocking(|| {
+            pear::quit_if_ours();
+            spotify::quit_if_ours();
+        })
+        .await;
+        app.exit(0);
+        return Ok(());
+    }
     m.command(&cmd, num, text).await
 }
 
