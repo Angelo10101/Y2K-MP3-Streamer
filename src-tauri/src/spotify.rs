@@ -4,6 +4,7 @@
 //! tells the rest of the app which source is active.
 
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::pear::PearStatus;
 
@@ -66,9 +67,27 @@ pub fn is_running() -> bool {
     false
 }
 
+/// Set when this app launched Spotify, so Stop only quits a Spotify it started.
+static STARTED_BY_US: AtomicBool = AtomicBool::new(false);
+
+/// Quits Spotify if this app started it.
+pub fn quit_if_ours() {
+    if !STARTED_BY_US.swap(false, Ordering::Relaxed) {
+        return;
+    }
+    #[cfg(not(windows))]
+    let _ = Command::new("pkill").args(["-x", "spotify"]).status();
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = Command::new("taskkill").args(["/IM", "Spotify.exe", "/F"]).creation_flags(0x0800_0000).status();
+    }
+}
+
 /// Launches the client, detached so it survives us quitting. Launching it again while it is
 /// running just focuses its window, which is how Windows "raises" it.
 pub fn raise() -> Result<(), String> {
+    let was_running = is_running();
     let parts = command();
     let (prog, args) = parts.split_first().ok_or_else(|| "RETRO_SPOTIFY_CMD is empty".to_string())?;
     let mut cmd = Command::new(prog);
@@ -80,6 +99,9 @@ pub fn raise() -> Result<(), String> {
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("cannot start `{}`: {e} (is Spotify installed? see the README)", parts.join(" ")))?;
+    if !was_running {
+        STARTED_BY_US.store(true, Ordering::Relaxed);
+    }
     std::thread::spawn(move || {
         let _ = child.wait();
     });

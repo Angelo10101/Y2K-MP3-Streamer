@@ -30,6 +30,7 @@ YouTube Music desktop app  --MPRIS (Linux) / local HTTP API (Windows)-->  Tauri 
 
 - **Playback engine:** th-ch's YouTube Music desktop app (now called [Pear Desktop](https://github.com/pear-devs/pear-desktop)) runs in the background. This app never talks to YouTube.
 - **Control:** play/pause/stop/next/previous, seek, volume, shuffle/repeat and track metadata over MPRIS on Linux, or through Pear's local API server on Windows (`RETRO_PLAYER_BACKEND=api` forces the API backend anywhere, `mpris` forces MPRIS).
+- **Stop quits everything:** the stop button (home player or any skin) also closes the skin window and the app, and quits Pear (or Spotify) if this app started it. A player this app didn't start, such as a browser tab, is only stopped, never closed.
 - **Skins:** real Windows Media Player `.wmz` skins are unzipped, their `.wms` layout is parsed and rendered, and the skin's own JScript runs against a `player.*` shim that maps onto MPRIS. Winamp classic `.wsz` skins are drawn from their sprite sheets (see [Winamp skins](#winamp-classic-skins-wsz)).
 - **Visualizer:** on Linux [cava](https://github.com/karlstav/cava) reads PipeWire; on Windows the app captures the default output device (WASAPI loopback) and runs an FFT. Either way bar data streams to the skin's effects area.
 

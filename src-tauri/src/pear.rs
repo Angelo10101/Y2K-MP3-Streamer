@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use serde::Serialize;
@@ -127,6 +128,9 @@ pub struct PearStatus {
     pub message: Option<String>,
 }
 
+/// Set when this app launched Pear, so Stop only quits a Pear it started, never one the user had open.
+static STARTED_BY_US: AtomicBool = AtomicBool::new(false);
+
 fn spawn() -> Result<(), String> {
     let mut cmd = Command::new(command());
     cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
@@ -143,10 +147,18 @@ fn spawn() -> Result<(), String> {
     let mut child = cmd.spawn().map_err(|e| {
         format!("cannot start `{}`: {e} (is YouTube Music / Pear Desktop installed? see the README)", command())
     })?;
+    STARTED_BY_US.store(true, Ordering::Relaxed);
     std::thread::spawn(move || {
         let _ = child.wait();
     });
     Ok(())
+}
+
+/// Quits Pear if this app started it. Blocking.
+pub fn quit_if_ours() {
+    if STARTED_BY_US.swap(false, Ordering::Relaxed) {
+        stop_pear();
+    }
 }
 
 fn stop_pear() {
