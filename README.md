@@ -7,7 +7,7 @@ Y2K themed front-end for YouTube Music (Linux, Windows) and Spotify (Linux, Wind
 
 ![A third-party skin running on the desktop next to other windows](docs/screenshot-desktop.png)
 
-*Also not mine: a skin made by someone else, shown on a desktop only to illustrate the app. The skins are not included in this repo.*
+*Also not mine: the Tubeframe skin, shown on a desktop with the Battery: Chemicalnova visualization, only to illustrate the app. The skins are not included in this repo.*
 
 ![The Alienware Invader skin running in this app](docs/screenshot-alienware.png)
 
