@@ -5,6 +5,10 @@ Y2K themed front-end for YouTube Music (Linux, Windows) and Spotify (Linux, Wind
 
 *The skin shown is not mine. It was designed by Microsoft for Windows Media Player; this image is only here to show what the app looks like with a skin loaded. The skins are not included in this repo (see below).*
 
+![A third-party skin running on the desktop next to other windows](docs/screenshot-desktop.png)
+
+*Also not mine: a skin made by someone else, shown on a desktop only to illustrate the app. The skins are not included in this repo.*
+
 ![The Alienware Invader skin running in this app](docs/screenshot-alienware.png)
 
 *Also not mine: the Alienware Invader skin, made by The Skins Factory (the Alienware name and logo belong to their owner). Shown only to illustrate the app.*
