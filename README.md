@@ -1,5 +1,7 @@
 # Y2K-MP3-Streamer
-Y2K themed front-end for YouTube Music (Linux, Windows) and Spotify (Linux, Windows)
+Y2K themed front-end for YouTube Music (Linux, Windows) and Spotify (Linux, Windows).
+Made to accommodate the old Windows Media Player or WinAmp skins. Recently
+supports the original Windows Media Player audio visualisations.
 
 ![The Headspace skin running in this app](docs/screenshot.png)
 
