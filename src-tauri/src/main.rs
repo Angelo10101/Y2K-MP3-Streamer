@@ -98,7 +98,10 @@ async fn pear_show(m: State<'_, Player>) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn queue_get() -> Result<Vec<pear::QueueItem>, String> {
+async fn queue_get(m: State<'_, Player>) -> Result<Vec<pear::QueueItem>, String> {
+    if !spotify::active() && !m.queue_is_pear().await {
+        return Err("the playing browser tab has no queue API".into()); // the drawer shows the current track
+    }
     if spotify::active() {
         return Err("Spotify has no queue API".into()); // the playlist drawer falls back to the current track
     }
@@ -106,7 +109,10 @@ async fn queue_get() -> Result<Vec<pear::QueueItem>, String> {
 }
 
 #[tauri::command]
-async fn queue_select(index: usize) -> Result<(), String> {
+async fn queue_select(m: State<'_, Player>, index: usize) -> Result<(), String> {
+    if !spotify::active() && !m.queue_is_pear().await {
+        return Err("the playing browser tab has no queue API".into());
+    }
     if spotify::active() {
         return Err("Spotify has no queue API".into());
     }

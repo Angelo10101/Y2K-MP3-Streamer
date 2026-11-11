@@ -49,7 +49,7 @@ impl Mpris {
         // the one playing, follow that instead so the controls act on the music you hear.
         if !explicit {
             if let Some(p) = preferred {
-                if self.status_of(p).await == "Playing" {
+                if self.status_of(p).await == "Playing" && !self.idle_playing(p, &names).await {
                     *self.external.lock().unwrap() = None;
                     return Ok(Some(p.clone()));
                 }
@@ -84,6 +84,25 @@ impl Mpris {
             fallback.get_or_insert_with(|| n.clone());
         }
         Ok(fallback)
+    }
+
+    /// Pear that was only launched (by us) reports "Playing" on its default song while its position
+    /// stays at 0 and no sound comes out. If another player is genuinely playing, that is the one
+    /// the user is listening to, so Pear is not treated as playing.
+    async fn idle_playing(&self, pear: &str, names: &[String]) -> bool {
+        let pos = match self.player_proxy(pear).await {
+            Ok(p) => p.get_property::<i64>("Position").await.unwrap_or(0),
+            Err(_) => return false,
+        };
+        if pos > 0 {
+            return false;
+        }
+        for n in names.iter().filter(|n| !n.contains("playerctld") && *n != pear) {
+            if self.status_of(n).await == "Playing" {
+                return true;
+            }
+        }
+        false
     }
 
     /// True when a player other than Pear is the one we are following (so Pear need not be started).

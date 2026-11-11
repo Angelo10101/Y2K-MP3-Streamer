@@ -67,6 +67,11 @@ impl Player {
         }
     }
 
+    /// Pear's queue only describes Pear's own playback, so it is hidden while following another player.
+    pub async fn queue_is_pear(&self) -> bool {
+        !self.external_active().await
+    }
+
     pub async fn snapshot(&self) -> PlayerState {
         match self {
             #[cfg(target_os = "linux")]
