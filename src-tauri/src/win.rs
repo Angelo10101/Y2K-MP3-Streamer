@@ -1,16 +1,37 @@
 //! Windows-only helpers: finding/hiding/showing Pear's window and shaping our own window.
 
 use windows_sys::core::BOOL;
-use windows_sys::Win32::Foundation::{HWND, LPARAM};
+use windows_sys::Win32::Foundation::{CloseHandle, HWND, LPARAM};
 use windows_sys::Win32::Graphics::Gdi::{CombineRgn, CreateRectRgn, DeleteObject, SetWindowRgn, RGN_OR};
+use windows_sys::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetClassNameW, GetWindowTextW, IsWindowVisible, PostMessageW, SetForegroundWindow, ShowWindow,
+    EnumWindows, GetClassNameW, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, SetForegroundWindow, ShowWindow,
     SW_RESTORE, SW_SHOW, WM_CLOSE,
 };
 
-/// Chromium/Electron top-level windows whose title contains this belong to Pear.
-const TITLE: &str = "YouTube Music";
+/// Chromium/Electron top-level window class. Chrome and Edge use it too, and their tabs are titled
+/// "... - YouTube Music", so the owning process is checked as well (see `is_pear_exe`).
 const CLASS: &str = "Chrome_WidgetWin_1";
+
+/// Full path of the executable that owns `hwnd`.
+fn exe_of(hwnd: HWND) -> Option<String> {
+    unsafe {
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        if pid == 0 {
+            return None;
+        }
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if h.is_null() {
+            return None;
+        }
+        let mut buf = [0u16; 1024];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(h, 0, buf.as_mut_ptr(), &mut len) != 0;
+        CloseHandle(h);
+        ok.then(|| String::from_utf16_lossy(&buf[..len as usize]))
+    }
+}
 
 unsafe extern "system" fn collect(hwnd: HWND, lparam: LPARAM) -> BOOL {
     let out = &mut *(lparam as *mut Vec<(isize, bool)>);
@@ -19,9 +40,12 @@ unsafe extern "system" fn collect(hwnd: HWND, lparam: LPARAM) -> BOOL {
     if n <= 0 || String::from_utf16_lossy(&cls[..n as usize]) != CLASS {
         return 1;
     }
-    let mut title = [0u16; 256];
-    let t = GetWindowTextW(hwnd, title.as_mut_ptr(), title.len() as i32);
-    if t <= 0 || !String::from_utf16_lossy(&title[..t as usize]).contains(TITLE) {
+    // Pear's real windows have a title; Electron's hidden helper windows of the same class do not
+    let mut title = [0u16; 8];
+    if GetWindowTextW(hwnd, title.as_mut_ptr(), title.len() as i32) <= 0 {
+        return 1;
+    }
+    if !exe_of(hwnd).is_some_and(|p| crate::pear::is_pear_exe(&p)) {
         return 1;
     }
     out.push((hwnd as isize, IsWindowVisible(hwnd) != 0));

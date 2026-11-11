@@ -26,6 +26,8 @@ fn command() -> String {
     let local = std::env::var("LOCALAPPDATA").unwrap_or_default();
     let programs = std::env::var("ProgramFiles").unwrap_or_default();
     [
+        format!(r"{local}\Programs\pear-desktop\Pear Desktop.exe"),
+        format!(r"{local}\Programs\Pear Desktop\Pear Desktop.exe"),
         format!(r"{local}\Programs\youtube-music\YouTube Music.exe"),
         format!(r"{local}\Programs\YouTube Music\YouTube Music.exe"),
         format!(r"{local}\youtube-music\YouTube Music.exe"),
@@ -34,6 +36,15 @@ fn command() -> String {
     .into_iter()
     .find(|p| std::path::Path::new(p).is_file())
     .unwrap_or_else(|| "YouTube Music.exe".into())
+}
+
+/// True for the executable of Pear Desktop / the th-ch YouTube Music app (the app was renamed, so
+/// both file names occur), never for a browser. Works on Windows and Unix style paths.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn is_pear_exe(path: &str) -> bool {
+    let name = path.rsplit(['\\', '/']).next().unwrap_or(path).to_lowercase();
+    let stem = name.strip_suffix(".exe").unwrap_or(&name);
+    matches!(stem, "youtube music" | "youtube-music" | "pear desktop" | "pear-desktop" | "pear")
 }
 
 fn api() -> String {
@@ -51,7 +62,13 @@ fn config_path() -> PathBuf {
 
 #[cfg(windows)]
 fn config_path() -> PathBuf {
-    PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default()).join("YouTube Music").join("config.json")
+    let base = PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default());
+    // the app was renamed from "YouTube Music" to "Pear Desktop"; use whichever folder exists
+    ["YouTube Music", "Pear Desktop"]
+        .iter()
+        .map(|d| base.join(d).join("config.json"))
+        .find(|p| p.is_file())
+        .unwrap_or_else(|| base.join("YouTube Music").join("config.json"))
 }
 
 /// True if a Pear/YouTube Music process exists.
@@ -70,18 +87,20 @@ pub fn is_running() -> bool {
 }
 
 #[cfg(windows)]
-const EXE: &str = "YouTube Music.exe";
+const EXES: [&str; 2] = ["YouTube Music.exe", "Pear Desktop.exe"];
 
 #[cfg(windows)]
 pub fn is_running() -> bool {
     use std::os::windows::process::CommandExt;
-    let filter = format!("IMAGENAME eq {EXE}");
-    Command::new("tasklist")
-        .args(["/FI", filter.as_str(), "/NH", "/FO", "CSV"])
-        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).contains(EXE))
-        .unwrap_or(false)
+    EXES.iter().any(|exe| {
+        let filter = format!("IMAGENAME eq {exe}");
+        Command::new("tasklist")
+            .args(["/FI", filter.as_str(), "/NH", "/FO", "CSV"])
+            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains(exe))
+            .unwrap_or(false)
+    })
 }
 
 #[cfg(not(any(target_os = "linux", windows)))]
@@ -167,7 +186,9 @@ fn stop_pear() {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        let _ = Command::new("taskkill").args(["/IM", EXE, "/F"]).creation_flags(0x0800_0000).status();
+        for exe in EXES {
+            let _ = Command::new("taskkill").args(["/IM", exe, "/F"]).creation_flags(0x0800_0000).status();
+        }
     }
     for _ in 0..50 {
         if !is_running() {
@@ -334,6 +355,15 @@ pub fn select(index: usize) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pear_exe_is_not_a_browser() {
+        assert!(is_pear_exe(r"C:\Users\a\AppData\Local\Programs\youtube-music\YouTube Music.exe"));
+        assert!(is_pear_exe(r"C:\x\Pear Desktop.exe"));
+        assert!(is_pear_exe("/opt/YouTube Music/youtube-music"));
+        assert!(!is_pear_exe(r"C:\Program Files\Google\Chrome\Application\chrome.exe"));
+        assert!(!is_pear_exe(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"));
+    }
 
     #[test]
     fn patch_satisfies_needs_patch_and_keeps_other_settings() {
